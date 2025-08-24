@@ -1,4 +1,4 @@
-use axum::{routing::get, Router};
+use axum::{Router, routing::get};
 use axum_session::{Session, SessionConfig, SessionLayer, SessionNullPool, SessionStore};
 use std::net::SocketAddr;
 use tokio::net::TcpListener;

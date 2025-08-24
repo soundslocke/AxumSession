@@ -1,4 +1,4 @@
-use axum::{routing::get, Router};
+use axum::{Router, routing::get};
 use axum_session::{Session, SessionConfig, SessionLayer, SessionStore};
 use axum_session_sqlx::SessionSqlitePool;
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePool, SqlitePoolOptions};

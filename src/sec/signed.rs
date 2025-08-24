@@ -10,7 +10,7 @@ use cookie::{Cookie, CookieJar, Key};
 pub(crate) const BASE64_DIGEST_LEN: usize = 44;
 pub(crate) const KEY_LEN: usize = 32;
 
-use base64::{prelude::BASE64_STANDARD, DecodeError, Engine};
+use base64::{DecodeError, Engine, prelude::BASE64_STANDARD};
 
 /// Encode `input` as the standard base64 with padding.
 pub(crate) fn encode<T: AsRef<[u8]>>(input: T) -> String {

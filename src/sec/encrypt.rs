@@ -1,7 +1,7 @@
 use crate::SessionError;
-use aes_gcm::aead::{generic_array::GenericArray, Aead, AeadInPlace, KeyInit, Payload};
 use aes_gcm::Aes256Gcm;
-use base64::{engine::general_purpose, Engine as _};
+use aes_gcm::aead::{Aead, AeadInPlace, KeyInit, Payload, generic_array::GenericArray};
+use base64::{Engine as _, engine::general_purpose};
 use cookie::Key;
 use rand::TryRngCore;
 

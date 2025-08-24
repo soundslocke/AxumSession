@@ -1,11 +1,11 @@
 use axum::body::Body;
 use axum::http::{Method, Request, StatusCode};
 use axum::response::{IntoResponse, Response};
-use axum::{routing::get, Router};
+use axum::{Router, routing::get};
 use axum_session::{Key, SessionConfig, SessionLayer, SessionStore};
 use axum_session_surreal::{SessionSurrealPool, SessionSurrealSession};
 use http_body_util::BodyExt;
-use surrealdb::engine::any::{connect, Any};
+use surrealdb::engine::any::{Any, connect};
 use surrealdb::opt::auth::Root;
 use tower::ServiceExt;
 

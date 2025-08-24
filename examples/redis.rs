@@ -1,4 +1,4 @@
-use axum::{extract::State, routing::get, Router};
+use axum::{Router, extract::State, routing::get};
 use axum_session::{Session, SessionConfig, SessionLayer, SessionStore};
 use axum_session_redispool::SessionRedisPool;
 use redis_pool::{RedisPool, SingleRedisPool};
