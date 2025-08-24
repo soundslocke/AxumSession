@@ -1,11 +1,11 @@
 use axum::extract::Request;
 use axum::middleware::Next;
 use axum::response::Response;
-use axum::{routing::get, Router};
+use axum::{Router, routing::get};
 use axum_session::{ReadOnlySession, SessionConfig, SessionLayer, SessionStore};
 use axum_session_surreal::{SessionSurrealPool, SessionSurrealSession};
 use hyper::StatusCode;
-use surrealdb::engine::any::{connect, Any};
+use surrealdb::engine::any::{Any, connect};
 use surrealdb::opt::auth::Root;
 use tokio::net::TcpListener;
 

@@ -6,13 +6,13 @@ use cookie::{Cookie, CookieJar, Key};
 use forwarded_header_value::{ForwardedHeaderValue, Identifier};
 #[cfg(not(feature = "rest_mode"))]
 use http::header::{COOKIE, SET_COOKIE};
-#[cfg(feature = "rest_mode")]
-use http::{header::HeaderName, HeaderValue};
 use http::{
+    HeaderMap,
     header::{FORWARDED, USER_AGENT},
     request::Request,
-    HeaderMap,
 };
+#[cfg(feature = "rest_mode")]
+use http::{HeaderValue, header::HeaderName};
 #[cfg(feature = "rest_mode")]
 use std::collections::HashMap;
 use std::{

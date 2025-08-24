@@ -1,7 +1,7 @@
-use axum::{routing::get, Router};
+use axum::{Router, routing::get};
 use axum_session::{SessionConfig, SessionLayer, SessionStore};
 use axum_session_surreal::{SessionSurrealPool, SessionSurrealSession};
-use surrealdb::engine::any::{connect, Any};
+use surrealdb::engine::any::{Any, connect};
 use surrealdb::opt::auth::Root;
 use tokio::net::TcpListener;
 
