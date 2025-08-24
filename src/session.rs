@@ -3,7 +3,7 @@ use axum::extract::FromRequestParts;
 
 #[cfg(feature = "key-store")]
 use fastbloom_rs::Membership;
-use http::{request::Parts, StatusCode};
+use http::{StatusCode, request::Parts};
 use serde::Serialize;
 use std::fmt::Debug;
 

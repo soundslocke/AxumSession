@@ -1,5 +1,5 @@
 use crate::{
-    sec::encrypt, DatabasePool, Session, SessionConfig, SessionData, SessionError, SessionTimers,
+    DatabasePool, Session, SessionConfig, SessionData, SessionError, SessionTimers, sec::encrypt,
 };
 use axum::extract::FromRequestParts;
 use chrono::{Duration, Utc};
@@ -8,7 +8,7 @@ use dashmap::DashMap;
 use fastbloom_rs::Deletable;
 #[cfg(feature = "key-store")]
 use fastbloom_rs::{CountingBloomFilter, FilterBuilder, Membership};
-use http::{request::Parts, StatusCode};
+use http::{StatusCode, request::Parts};
 use serde::Serialize;
 use std::{fmt::Debug, sync::Arc};
 use tokio::sync::RwLock;
@@ -375,56 +375,72 @@ where
 
     #[inline]
     pub(crate) fn renew(&self, id: String) {
-        if let Some(mut instance) = self.inner.get_mut(&id) {
-            instance.renew();
-        } else {
-            tracing::warn!("Session data unexpectedly missing");
+        match self.inner.get_mut(&id) {
+            Some(mut instance) => {
+                instance.renew();
+            }
+            _ => {
+                tracing::warn!("Session data unexpectedly missing");
+            }
         }
     }
 
     #[inline]
     pub(crate) fn destroy(&self, id: String) {
-        if let Some(mut instance) = self.inner.get_mut(&id) {
-            instance.destroy();
-        } else {
-            tracing::warn!("Session data unexpectedly missing");
+        match self.inner.get_mut(&id) {
+            Some(mut instance) => {
+                instance.destroy();
+            }
+            _ => {
+                tracing::warn!("Session data unexpectedly missing");
+            }
         }
     }
 
     #[inline]
     pub(crate) fn set_longterm(&self, id: String, longterm: bool) {
-        if let Some(mut instance) = self.inner.get_mut(&id) {
-            instance.set_longterm(longterm);
-        } else {
-            tracing::warn!("Session data unexpectedly missing");
+        match self.inner.get_mut(&id) {
+            Some(mut instance) => {
+                instance.set_longterm(longterm);
+            }
+            _ => {
+                tracing::warn!("Session data unexpectedly missing");
+            }
         }
     }
 
     #[inline]
     pub(crate) fn set_store(&self, id: String, storable: bool) {
-        if let Some(mut instance) = self.inner.get_mut(&id) {
-            instance.set_store(storable);
-        } else {
-            tracing::warn!("Session data unexpectedly missing");
+        match self.inner.get_mut(&id) {
+            Some(mut instance) => {
+                instance.set_store(storable);
+            }
+            _ => {
+                tracing::warn!("Session data unexpectedly missing");
+            }
         }
     }
 
     #[inline]
     pub(crate) fn update(&self, id: String) {
-        if let Some(mut instance) = self.inner.get_mut(&id) {
-            instance.update();
-        } else {
-            tracing::warn!("Session data unexpectedly missing");
+        match self.inner.get_mut(&id) {
+            Some(mut instance) => {
+                instance.update();
+            }
+            _ => {
+                tracing::warn!("Session data unexpectedly missing");
+            }
         }
     }
 
     #[inline]
     pub(crate) fn get<N: serde::de::DeserializeOwned>(&self, id: String, key: &str) -> Option<N> {
-        if let Some(instance) = self.inner.get(&id) {
-            instance.get(key)
-        } else {
-            tracing::warn!("Session data unexpectedly missing");
-            None
+        match self.inner.get(&id) {
+            Some(instance) => instance.get(key),
+            _ => {
+                tracing::warn!("Session data unexpectedly missing");
+                None
+            }
         }
     }
 
@@ -434,66 +450,83 @@ where
         id: String,
         key: &str,
     ) -> Option<N> {
-        if let Some(mut instance) = self.inner.get_mut(&id) {
-            instance.get_remove(key)
-        } else {
-            tracing::warn!("Session data unexpectedly missing");
-            None
+        match self.inner.get_mut(&id) {
+            Some(mut instance) => instance.get_remove(key),
+            _ => {
+                tracing::warn!("Session data unexpectedly missing");
+                None
+            }
         }
     }
 
     #[inline]
     pub(crate) fn set(&self, id: String, key: &str, value: impl Serialize) {
-        if let Some(mut instance) = self.inner.get_mut(&id) {
-            instance.set(key, value);
-        } else {
-            tracing::warn!("Session data unexpectedly missing");
+        match self.inner.get_mut(&id) {
+            Some(mut instance) => {
+                instance.set(key, value);
+            }
+            _ => {
+                tracing::warn!("Session data unexpectedly missing");
+            }
         }
     }
 
     #[inline]
     pub(crate) fn remove(&self, id: String, key: &str) {
-        if let Some(mut instance) = self.inner.get_mut(&id) {
-            instance.remove(key);
-        } else {
-            tracing::warn!("Session data unexpectedly missing");
+        match self.inner.get_mut(&id) {
+            Some(mut instance) => {
+                instance.remove(key);
+            }
+            _ => {
+                tracing::warn!("Session data unexpectedly missing");
+            }
         }
     }
 
     #[inline]
     pub(crate) fn clear_session_data(&self, id: String) {
-        if let Some(mut instance) = self.inner.get_mut(&id) {
-            instance.clear();
-        } else {
-            tracing::warn!("Session data unexpectedly missing");
+        match self.inner.get_mut(&id) {
+            Some(mut instance) => {
+                instance.clear();
+            }
+            _ => {
+                tracing::warn!("Session data unexpectedly missing");
+            }
         }
     }
 
     #[inline]
     pub(crate) fn set_session_request(&self, id: String) {
-        if let Some(mut instance) = self.inner.get_mut(&id) {
-            instance.set_request();
-        } else {
-            tracing::warn!("Session data unexpectedly missing");
+        match self.inner.get_mut(&id) {
+            Some(mut instance) => {
+                instance.set_request();
+            }
+            _ => {
+                tracing::warn!("Session data unexpectedly missing");
+            }
         }
     }
 
     #[inline]
     pub(crate) fn remove_session_request(&self, id: String) {
-        if let Some(mut instance) = self.inner.get_mut(&id) {
-            instance.remove_request();
-        } else {
-            tracing::warn!("Session data unexpectedly missing");
+        match self.inner.get_mut(&id) {
+            Some(mut instance) => {
+                instance.remove_request();
+            }
+            _ => {
+                tracing::warn!("Session data unexpectedly missing");
+            }
         }
     }
 
     #[inline]
     pub(crate) fn is_session_parallel(&self, id: String) -> bool {
-        if let Some(instance) = self.inner.get(&id) {
-            instance.is_parallel()
-        } else {
-            tracing::warn!("Session data unexpectedly missing");
-            false
+        match self.inner.get(&id) {
+            Some(instance) => instance.is_parallel(),
+            _ => {
+                tracing::warn!("Session data unexpectedly missing");
+                false
+            }
         }
     }
 
