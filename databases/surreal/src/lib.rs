@@ -4,7 +4,7 @@
 #![forbid(unsafe_code)]
 
 use async_trait::async_trait;
-use axum_session::{DatabaseError, DatabasePool, Session, SessionStore};
+use axum_session::{DatabaseError, DatabasePool, Session, SessionData, SessionStore};
 use chrono::Utc;
 use surrealdb::{Connection, Surreal};
 
@@ -106,7 +106,7 @@ impl<C: Connection> DatabasePool for SessionSurrealPool<C> {
     async fn store(
         &self,
         id: &str,
-        session: &str,
+        session: &SessionData,
         expires: i64,
         table_name: &str,
     ) -> Result<(), DatabaseError> {
@@ -117,13 +117,13 @@ impl<C: Connection> DatabasePool for SessionSurrealPool<C> {
         .bind(("table_name", table_name.to_string()))
         .bind(("session_id", id.to_string()))
         .bind(("expire", expires.to_string()))
-        .bind(("store", session.to_string()))
+        .bind(("store", serde_json::to_string(session).unwrap()))
         .await.map_err(|err| DatabaseError::GenericSelectError(err.to_string()))?;
 
         Ok(())
     }
 
-    async fn load(&self, id: &str, table_name: &str) -> Result<Option<String>, DatabaseError> {
+    async fn load(&self, id: &str, table_name: &str) -> Result<Option<SessionData>, DatabaseError> {
         let mut res = self
             .connection
             .query(
@@ -139,7 +139,11 @@ impl<C: Connection> DatabasePool for SessionSurrealPool<C> {
         let response: Option<String> = res
             .take("sessionstore")
             .map_err(|err| DatabaseError::GenericNotSupportedError(err.to_string()))?;
-        Ok(response)
+
+        let session = serde_json::from_str::<SessionData>(&response.unwrap())
+            .map_err(|err| DatabaseError::GenericSelectError(err.to_string()));
+
+        Some(session).transpose()
     }
 
     async fn delete_one_by_id(&self, id: &str, table_name: &str) -> Result<(), DatabaseError> {

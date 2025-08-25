@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use axum_session::{DatabaseError, DatabasePool, Session, SessionStore};
+use axum_session::{DatabaseError, DatabasePool, Session, SessionData, SessionStore};
 use chrono::Utc;
 use sqlx::{pool::Pool, PgPool, Postgres};
 
@@ -104,7 +104,7 @@ impl DatabasePool for SessionPgPool {
     async fn store(
         &self,
         id: &str,
-        session: &str,
+        session: &SessionData,
         expires: i64,
         table_name: &str,
     ) -> Result<(), DatabaseError> {
@@ -119,7 +119,7 @@ impl DatabasePool for SessionPgPool {
             .replace("%%TABLE_NAME%%", table_name),
         )
         .bind(id)
-        .bind(session)
+        .bind(serde_json::to_string(session).unwrap())
         .bind(expires)
         .execute(&self.pool)
         .await
@@ -127,7 +127,7 @@ impl DatabasePool for SessionPgPool {
         Ok(())
     }
 
-    async fn load(&self, id: &str, table_name: &str) -> Result<Option<String>, DatabaseError> {
+    async fn load(&self, id: &str, table_name: &str) -> Result<Option<SessionData>, DatabaseError> {
         let result: Option<(String,)> = sqlx::query_as(
             &r#"
             SELECT session FROM %%TABLE_NAME%%
@@ -141,7 +141,11 @@ impl DatabasePool for SessionPgPool {
         .await
         .map_err(|err| DatabaseError::GenericSelectError(err.to_string()))?;
 
-        Ok(result.map(|(session,)| session))
+        let session =
+            serde_json::from_str::<SessionData>(&result.map(|(session,)| session).unwrap())
+                .map_err(|err| DatabaseError::GenericSelectError(err.to_string()));
+
+        Some(session).transpose()
     }
 
     async fn delete_one_by_id(&self, id: &str, table_name: &str) -> Result<(), DatabaseError> {

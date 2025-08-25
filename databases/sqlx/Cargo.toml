@@ -27,6 +27,8 @@ sqlx = { version = "0.8.6", default-features = false, features = [
     "uuid",
 ]}
 axum_session.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
 axum = { version = "0.8.4", features = ["macros"] }

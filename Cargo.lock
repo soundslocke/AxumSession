@@ -496,6 +496,8 @@ dependencies = [
  "axum_session",
  "bb8-redis",
  "redis",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -506,6 +508,8 @@ dependencies = [
  "axum_session",
  "redis",
  "redis_pool",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

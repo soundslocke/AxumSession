@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use axum_session::{DatabaseError, DatabasePool, Session, SessionStore};
+use axum_session::{DatabaseError, DatabasePool, Session, SessionData, SessionStore};
 use redis_pool::SingleRedisPool;
 
 ///Redis's Session Helper type for the DatabasePool.
@@ -65,7 +65,7 @@ impl DatabasePool for SessionRedisPool {
     async fn store(
         &self,
         id: &str,
-        session: &str,
+        session: &SessionData,
         expires: i64,
         table_name: &str,
     ) -> Result<(), DatabaseError> {
@@ -80,8 +80,8 @@ impl DatabasePool for SessionRedisPool {
             .await
             .map_err(|err| DatabaseError::GenericAcquire(err.to_string()))?;
         redis::pipe()
-            .atomic() //makes this a transation.
-            .set(&id, session)
+            .atomic() //makes this a transaction.
+            .set(&id, serde_json::to_string(session).unwrap())
             .ignore()
             .expire_at(&id, expires)
             .ignore()
@@ -91,7 +91,7 @@ impl DatabasePool for SessionRedisPool {
         Ok(())
     }
 
-    async fn load(&self, id: &str, table_name: &str) -> Result<Option<String>, DatabaseError> {
+    async fn load(&self, id: &str, table_name: &str) -> Result<Option<SessionData>, DatabaseError> {
         let mut con = self
             .pool
             .acquire()
@@ -107,7 +107,11 @@ impl DatabasePool for SessionRedisPool {
             .query_async(&mut con)
             .await
             .map_err(|err| DatabaseError::GenericSelectError(err.to_string()))?;
-        Ok(Some(result))
+
+        let session = serde_json::from_str::<SessionData>(&result)
+            .map_err(|err| DatabaseError::GenericSelectError(err.to_string()));
+
+        Some(session).transpose()
     }
 
     async fn delete_one_by_id(&self, id: &str, table_name: &str) -> Result<(), DatabaseError> {

@@ -1,6 +1,8 @@
 use async_trait::async_trait;
 use thiserror::Error;
 
+use crate::SessionData;
+
 /// The Trait used to identify a database pool.
 ///
 /// This can be freely implemented but default implementations for the supported database types are already included
@@ -23,14 +25,14 @@ pub trait DatabasePool {
     async fn store(
         &self,
         id: &str,
-        session: &str,
+        session: &SessionData,
         expires: i64,
         table_name: &str,
     ) -> Result<(), DatabaseError>;
 
     /// This is called to receive the session from the database using the given table name.
     /// if an error occurs it should be propagated to the caller.
-    async fn load(&self, id: &str, table_name: &str) -> Result<Option<String>, DatabaseError>;
+    async fn load(&self, id: &str, table_name: &str) -> Result<Option<SessionData>, DatabaseError>;
 
     /// This is called to delete one session from the database using the given table name.
     /// if an error occurs it should be propagated to the caller.

@@ -15,3 +15,5 @@ async-trait.workspace = true
 redis = { version = "0.32.5", features = ["aio", "tokio-comp"] }
 bb8-redis = "0.24.0"
 axum_session.workspace = true
+serde.workspace = true
+serde_json.workspace = true
