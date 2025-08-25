@@ -1,4 +1,4 @@
-use crate::{DatabaseError, DatabasePool, Session, SessionStore};
+use crate::{DatabaseError, DatabasePool, Session, SessionData, SessionStore};
 use async_trait::async_trait;
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -46,14 +46,14 @@ impl DatabasePool for SessionAnyPool {
     async fn store(
         &self,
         id: &str,
-        session: &str,
+        session: &SessionData,
         expires: i64,
         table_name: &str,
     ) -> Result<(), DatabaseError> {
         self.pool.store(id, session, expires, table_name).await
     }
 
-    async fn load(&self, id: &str, table_name: &str) -> Result<Option<String>, DatabaseError> {
+    async fn load(&self, id: &str, table_name: &str) -> Result<Option<SessionData>, DatabaseError> {
         self.pool.load(id, table_name).await
     }
 

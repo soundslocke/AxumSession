@@ -1,6 +1,4 @@
-use crate::{
-    DatabasePool, Session, SessionConfig, SessionData, SessionError, SessionTimers, sec::encrypt,
-};
+use crate::{DatabasePool, Session, SessionConfig, SessionData, SessionError, SessionTimers};
 use axum::extract::FromRequestParts;
 use chrono::{Duration, Utc};
 use dashmap::DashMap;
@@ -224,31 +222,34 @@ where
         cookie_value: String,
     ) -> Result<Option<SessionData>, SessionError> {
         if let Some(client) = &self.client {
-            let result: Option<String> = client
+            let result: Option<SessionData> = client
                 .load(&cookie_value, &self.config.database.table_name)
                 .await?;
 
-            if let Some(mut session) = result
-                .map(|session| {
-                    if let Some(key) = self.config.database.database_key.as_ref() {
-                        serde_json::from_str::<SessionData>(
-                            &match encrypt::decrypt(&cookie_value, &session, key) {
-                                Ok(v) => v,
-                                Err(err) => {
-                                    tracing::error!(err = %err, "Failed to decrypt Session data from database.");
-                                    String::new()
-                                }
-                            }
-                        )
-                    } else {
-                        serde_json::from_str::<SessionData>(&session)
-                    }
-                })
-                .transpose()?
-            {
-                session.id = cookie_value;
-                return Ok(Some(session));
-            }
+            return Ok(result);
+
+            // TODO implement encryption in SessionData...
+            // if let Some(mut session) = result
+            //     .map(|session| {
+            //         if let Some(key) = self.config.database.database_key.as_ref() {
+            //             serde_json::from_str::<SessionData>(
+            //                 &match encrypt::decrypt(&cookie_value, &session, key) {
+            //                     Ok(v) => v,
+            //                     Err(err) => {
+            //                         tracing::error!(err = %err, "Failed to decrypt Session data from database.");
+            //                         String::new()
+            //                     }
+            //                 }
+            //             )
+            //         } else {
+            //             serde_json::from_str::<SessionData>(&session)
+            //         }
+            //     })
+            //     .transpose()?
+            // {
+            //     session.id = cookie_value;
+            //     return Ok(Some(session));
+            // }
         }
 
         Ok(None)
@@ -282,16 +283,18 @@ where
             client
                 .store(
                     &session.id,
-                    &if let Some(key) = self.config.database.database_key.as_ref() {
-                        encrypt::encrypt(&session.id, &serde_json::to_string(session)?, key)
-                            .map_err(|e| {
-                                SessionError::GenericNotSupportedError(format!(
-                                    "Error: {e} Occurred when encrypting a Session.",
-                                ))
-                            })?
-                    } else {
-                        serde_json::to_string(session)?
-                    },
+                    session,
+                    // TODO Same as above, implement encryption in SessionData...
+                    // &if let Some(key) = self.config.database.database_key.as_ref() {
+                    //     encrypt::encrypt(&session.id, &serde_json::to_string(session)?, key)
+                    //         .map_err(|e| {
+                    //             SessionError::GenericNotSupportedError(format!(
+                    //                 "Error: {e} Occurred when encrypting a Session.",
+                    //             ))
+                    //         })?
+                    // } else {
+                    //     serde_json::to_string(session)?
+                    // },
                     session.expires.timestamp(),
                     &self.config.database.table_name,
                 )

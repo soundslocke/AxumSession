@@ -4,7 +4,7 @@
 #![forbid(unsafe_code)]
 
 use async_trait::async_trait;
-use axum_session::{DatabaseError, DatabasePool, Session, SessionStore};
+use axum_session::{DatabaseError, DatabasePool, Session, SessionData, SessionStore};
 use chrono::Utc;
 use mongodb::{
     bson::{doc, Document},
@@ -109,7 +109,7 @@ impl DatabasePool for SessionMongoPool {
     async fn store(
         &self,
         id: &str,
-        session: &str,
+        session: &SessionData,
         expires: i64,
         table_name: &str,
     ) -> Result<(), DatabaseError> {
@@ -120,7 +120,7 @@ impl DatabasePool for SessionMongoPool {
             let update_data = doc! {"$set": {
                 "id": id.to_string(),
                 "expires": expires,
-                "session": session.to_string()
+                "session": serde_json::to_string(session).unwrap()
             }};
 
             db.collection::<MongoSessionData>(table_name)
@@ -133,7 +133,7 @@ impl DatabasePool for SessionMongoPool {
         Ok(())
     }
 
-    async fn load(&self, id: &str, table_name: &str) -> Result<Option<String>, DatabaseError> {
+    async fn load(&self, id: &str, table_name: &str) -> Result<Option<SessionData>, DatabaseError> {
         Ok(match &self.client.default_database() {
             Some(db) => {
                 let filter = doc! {
@@ -151,7 +151,10 @@ impl DatabasePool for SessionMongoPool {
                         if result.session.is_empty() {
                             None
                         } else {
-                            Some(result.session)
+                            match serde_json::from_str::<SessionData>(&result.session) {
+                                Ok(session_data) => Some(session_data),
+                                Err(_) => None,
+                            }
                         }
                     }
                     None => None,
