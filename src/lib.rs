@@ -21,7 +21,7 @@ pub use errors::SessionError;
 pub use layer::SessionLayer;
 pub use sec::*;
 pub use session::{ReadOnlySession, Session};
-pub use session_data::SessionData;
+pub use session_data::{SessionData, SessionOps};
 pub use session_store::SessionStore;
 
 pub(crate) use service::SessionService;

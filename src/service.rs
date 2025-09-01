@@ -1,4 +1,6 @@
-use crate::{DatabasePool, Session, SessionData, SessionError, SessionStore, headers::*};
+use crate::{
+    DatabasePool, Session, SessionData, SessionError, SessionOps, SessionStore, headers::*,
+};
 use axum::{BoxError, response::Response};
 use bytes::Bytes;
 use chrono::Utc;

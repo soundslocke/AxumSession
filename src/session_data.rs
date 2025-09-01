@@ -1,6 +1,7 @@
 use crate::SessionConfig;
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::{collections::HashMap, fmt::Debug};
 
 /// The Store and Configured Data for a Session.
@@ -15,6 +16,20 @@ use std::{collections::HashMap, fmt::Debug};
 /// let session_data = SessionData::new(token.to_string(), true, &config);
 /// ```
 ///
+pub trait SessionOps {
+    fn id(&mut self) -> String;
+    fn renew(&mut self);
+    fn update(&mut self);
+    fn destroy(&mut self);
+    fn set_longterm(&mut self, longterm: bool);
+    fn set_store(&mut self, can_store: bool);
+    fn get(&self, key: &str) -> Option<Value>;
+    fn get_remove(&mut self, key: &str) -> Option<Value>;
+    fn set(&mut self, key: &str, value: Value);
+    fn remove(&mut self, key: &str);
+    fn clear(&mut self);
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SessionData {
     #[serde(skip)]
@@ -35,6 +50,62 @@ pub struct SessionData {
     pub(crate) update: bool,
     #[serde(skip)]
     pub(crate) requests: usize,
+}
+
+impl SessionOps for SessionData {
+    fn id(&mut self) -> String {
+        self.id.clone()
+    }
+
+    fn renew(&mut self) {
+        self.renew = true;
+        self.update = true;
+    }
+
+    fn update(&mut self) {
+        self.update = true;
+    }
+
+    fn destroy(&mut self) {
+        self.destroy = true;
+    }
+
+    fn set_longterm(&mut self, longterm: bool) {
+        self.longterm = longterm;
+        self.update = true;
+    }
+
+    fn set_store(&mut self, can_store: bool) {
+        self.store = can_store;
+        self.update = true;
+    }
+
+    fn get(&self, key: &str) -> Option<Value> {
+        let string = self.data.get(key)?;
+        serde_json::from_str(string).ok()
+    }
+
+    fn get_remove(&mut self, key: &str) -> Option<Value> {
+        let string = self.data.remove(key)?;
+        self.update = true;
+        serde_json::from_str(&string).ok()
+    }
+
+    fn set(&mut self, key: &str, value: Value) {
+        let value = serde_json::to_string(&value).unwrap_or_else(|_| "".to_string());
+        let _ = self.data.insert(key.to_string(), value);
+        self.update = true;
+    }
+
+    fn remove(&mut self, key: &str) {
+        let _ = self.data.remove(key);
+        self.update = true;
+    }
+
+    fn clear(&mut self) {
+        self.data.clear();
+        self.update = true;
+    }
 }
 
 impl SessionData {
@@ -198,8 +269,6 @@ impl SessionData {
     /// let id = session.get("user-id").unwrap_or(0);
     /// ```
     ///
-    ///Used to get data stored within SessionDatas hashmap from a key value.
-    ///
     #[inline]
     pub fn get<T: serde::de::DeserializeOwned>(&self, key: &str) -> Option<T> {
         let string = self.data.get(key)?;
@@ -216,8 +285,6 @@ impl SessionData {
     /// ```rust ignore
     /// let id = session.get_remove("user-id").unwrap_or(0);
     /// ```
-    ///
-    /// Used to get data stored within SessionDatas hashmap from a key value.
     ///
     #[inline]
     pub fn get_remove<T: serde::de::DeserializeOwned>(&mut self, key: &str) -> Option<T> {

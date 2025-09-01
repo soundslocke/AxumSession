@@ -1,4 +1,6 @@
-use crate::{DatabasePool, Session, SessionConfig, SessionData, SessionError, SessionTimers};
+use crate::{
+    DatabasePool, Session, SessionConfig, SessionData, SessionError, SessionOps, SessionTimers,
+};
 use axum::extract::FromRequestParts;
 use chrono::{Duration, Utc};
 use dashmap::DashMap;
@@ -220,9 +222,9 @@ where
     pub(crate) async fn load_session(
         &self,
         cookie_value: String,
-    ) -> Result<Option<SessionData>, SessionError> {
+    ) -> Result<Option<impl SessionOps>, SessionError> {
         if let Some(client) = &self.client {
-            let result: Option<SessionData> = client
+            let result: Option<_> = client
                 .load(&cookie_value, &self.config.database.table_name)
                 .await?;
 
@@ -278,11 +280,13 @@ where
     /// };
     /// ```
     ///
-    pub(crate) async fn store_session(&self, session: &SessionData) -> Result<(), SessionError> {
+    pub(crate) async fn store_session(
+        &self,
+        session: &impl SessionOps,
+    ) -> Result<(), SessionError> {
         if let Some(client) = &self.client {
             client
                 .store(
-                    &session.id,
                     session,
                     // TODO Same as above, implement encryption in SessionData...
                     // &if let Some(key) = self.config.database.database_key.as_ref() {
@@ -295,7 +299,6 @@ where
                     // } else {
                     //     serde_json::to_string(session)?
                     // },
-                    session.expires.timestamp(),
                     &self.config.database.table_name,
                 )
                 .await?;

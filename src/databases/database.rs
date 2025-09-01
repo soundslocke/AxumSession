@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use thiserror::Error;
 
-use crate::SessionData;
+use crate::SessionOps;
 
 /// The Trait used to identify a database pool.
 ///
@@ -22,17 +22,16 @@ pub trait DatabasePool {
     /// if an error occurs it should be propagated to the caller.
     /// expires is a unix timestamp(number of non-leap seconds since January 1, 1970 0:00:00 UTC)
     /// which is set to UTC::now() + the expiration time.
-    async fn store(
-        &self,
-        id: &str,
-        session: &SessionData,
-        expires: i64,
-        table_name: &str,
-    ) -> Result<(), DatabaseError>;
+    async fn store(&self, session: &impl SessionOps, table_name: &str)
+    -> Result<(), DatabaseError>;
 
     /// This is called to receive the session from the database using the given table name.
     /// if an error occurs it should be propagated to the caller.
-    async fn load(&self, id: &str, table_name: &str) -> Result<Option<SessionData>, DatabaseError>;
+    async fn load(
+        &self,
+        id: &str,
+        table_name: &str,
+    ) -> Result<Option<impl SessionOps>, DatabaseError>;
 
     /// This is called to delete one session from the database using the given table name.
     /// if an error occurs it should be propagated to the caller.
