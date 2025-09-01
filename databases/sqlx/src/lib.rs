@@ -33,6 +33,7 @@ mod tests {
     use http_body_util::BodyExt;
     use log::LevelFilter;
     use serde::{Deserialize, Serialize};
+    use serde_json::json;
     use sqlx::{
         postgres::{PgConnectOptions, PgPoolOptions},
         ConnectOptions,
@@ -82,12 +83,13 @@ mod tests {
                 b: "Hello World".to_owned(),
             };
 
-            session.set("test", test);
+            session.set("test", json!(test));
             Redirect::to("/")
         }
 
         async fn test_session(session: Session<SessionPgPool>) -> String {
-            let test: Test = session.get("test").unwrap_or_default();
+            let test_value = session.get("test").unwrap_or_default();
+            let test: Test = serde_json::from_value(test_value).unwrap();
             let other = Test {
                 a: 2,
                 b: "Hello World".to_owned(),

@@ -1,4 +1,6 @@
-use crate::{DatabaseError, DatabasePool, Session, SessionData, SessionStore};
+use crate::{
+    DatabaseError, DatabasePool, Session, SessionOps, SessionStore, databases::database::StoredAs,
+};
 use async_trait::async_trait;
 
 ///Null's Session Helper type for a DatabaseLess Session.
@@ -27,19 +29,13 @@ impl DatabasePool for SessionNullPool {
 
     async fn store(
         &self,
-        _id: &str,
-        _session: &SessionData,
-        _expires: i64,
+        _session: &Box<dyn SessionOps>,
         _table_name: &str,
     ) -> Result<(), DatabaseError> {
         Ok(())
     }
 
-    async fn load(
-        &self,
-        _id: &str,
-        _table_name: &str,
-    ) -> Result<Option<SessionData>, DatabaseError> {
+    async fn load(&self, _id: &str, _table_name: &str) -> Result<Option<StoredAs>, DatabaseError> {
         Ok(None)
     }
 

@@ -1,4 +1,4 @@
-use crate::{DatabasePool, Session, SessionConfig, SessionData, SessionError, SessionTimers};
+use crate::{DatabasePool, Session, SessionConfig, SessionError, SessionOps, SessionTimers};
 use axum::extract::FromRequestParts;
 use chrono::{Duration, Utc};
 use dashmap::DashMap;
@@ -7,7 +7,7 @@ use fastbloom_rs::Deletable;
 #[cfg(feature = "key-store")]
 use fastbloom_rs::{CountingBloomFilter, FilterBuilder, Membership};
 use http::{StatusCode, request::Parts};
-use serde::Serialize;
+use serde::de::DeserializeOwned;
 use std::{fmt::Debug, sync::Arc};
 use tokio::sync::RwLock;
 
@@ -29,7 +29,7 @@ where
     /// Client for the database.
     pub client: Option<T>,
     /// locked Hashmap containing UserID and their session data.
-    pub(crate) inner: Arc<DashMap<String, SessionData>>,
+    pub(crate) inner: Arc<DashMap<String, Box<dyn SessionOps>>>,
     /// Session Configuration.
     pub config: SessionConfig,
     /// Session Timers used for Clearing Memory and Database.
@@ -220,13 +220,16 @@ where
     pub(crate) async fn load_session(
         &self,
         cookie_value: String,
-    ) -> Result<Option<SessionData>, SessionError> {
+    ) -> Result<Option<Box<dyn SessionOps>>, SessionError> {
         if let Some(client) = &self.client {
-            let result: Option<SessionData> = client
+            let stored_session = client
                 .load(&cookie_value, &self.config.database.table_name)
-                .await?;
+                .await?
+                .unwrap_or_default();
 
-            return Ok(result);
+            let session_ops = self.config.session_ops.from_storage(&stored_session);
+
+            return Some(session_ops).transpose();
 
             // TODO implement encryption in SessionData...
             // if let Some(mut session) = result
@@ -278,11 +281,13 @@ where
     /// };
     /// ```
     ///
-    pub(crate) async fn store_session(&self, session: &SessionData) -> Result<(), SessionError> {
+    pub(crate) async fn store_session(
+        &self,
+        session: &Box<dyn SessionOps>,
+    ) -> Result<(), SessionError> {
         if let Some(client) = &self.client {
             client
                 .store(
-                    &session.id,
                     session,
                     // TODO Same as above, implement encryption in SessionData...
                     // &if let Some(key) = self.config.database.database_key.as_ref() {
@@ -295,7 +300,6 @@ where
                     // } else {
                     //     serde_json::to_string(session)?
                     // },
-                    session.expires.timestamp(),
                     &self.config.database.table_name,
                 )
                 .await?;
@@ -369,7 +373,7 @@ where
                 self.config.memory.memory_lifespan,
                 self.config.clear_check_on_load,
             );
-            inner.set_request();
+            inner.add_request();
             return true;
         }
 
@@ -416,7 +420,7 @@ where
     pub(crate) fn set_store(&self, id: String, storable: bool) {
         match self.inner.get_mut(&id) {
             Some(mut instance) => {
-                instance.set_store(storable);
+                instance.set_storable(storable);
             }
             _ => {
                 tracing::warn!("Session data unexpectedly missing");
@@ -437,9 +441,14 @@ where
     }
 
     #[inline]
-    pub(crate) fn get<N: serde::de::DeserializeOwned>(&self, id: String, key: &str) -> Option<N> {
+    pub(crate) fn get<V>(&self, id: String, key: &str) -> Option<V>
+    where
+        V: DeserializeOwned,
+    {
         match self.inner.get(&id) {
-            Some(instance) => instance.get(key),
+            Some(instance) => instance
+                .get(key)
+                .and_then(|v| serde_json::from_value(v).ok()),
             _ => {
                 tracing::warn!("Session data unexpectedly missing");
                 None
@@ -448,13 +457,14 @@ where
     }
 
     #[inline]
-    pub(crate) fn get_remove<N: serde::de::DeserializeOwned>(
-        &self,
-        id: String,
-        key: &str,
-    ) -> Option<N> {
+    pub(crate) fn get_remove<V>(&self, id: String, key: &str) -> Option<V>
+    where
+        V: DeserializeOwned,
+    {
         match self.inner.get_mut(&id) {
-            Some(mut instance) => instance.get_remove(key),
+            Some(mut instance) => instance
+                .get_remove(key)
+                .and_then(|v| serde_json::from_value(v).ok()),
             _ => {
                 tracing::warn!("Session data unexpectedly missing");
                 None
@@ -463,9 +473,13 @@ where
     }
 
     #[inline]
-    pub(crate) fn set(&self, id: String, key: &str, value: impl Serialize) {
+    pub(crate) fn set<V>(&self, id: String, key: &str, value: V)
+    where
+        V: serde::Serialize,
+    {
         match self.inner.get_mut(&id) {
             Some(mut instance) => {
+                let value = serde_json::to_value(value).expect("Failed to serialize value");
                 instance.set(key, value);
             }
             _ => {
@@ -502,7 +516,7 @@ where
     pub(crate) fn set_session_request(&self, id: String) {
         match self.inner.get_mut(&id) {
             Some(mut instance) => {
-                instance.set_request();
+                instance.add_request();
             }
             _ => {
                 tracing::warn!("Session data unexpectedly missing");

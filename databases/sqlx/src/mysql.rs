@@ -8,7 +8,7 @@ pub type SessionMySqlSession = Session<SessionMySqlPool>;
 ///Mysql's Session Store Helper type for the DatabasePool.
 pub type SessionMySqlSessionStore = SessionStore<SessionMySqlPool>;
 
-/// Mysql's Pool type for DatabasePool
+/// MySQL's Pool type for DatabasePool
 #[derive(Debug, Clone)]
 pub struct SessionMySqlPool {
     pool: Pool<MySql>,
@@ -39,8 +39,8 @@ impl DatabasePool for SessionMySqlPool {
 
         let (t,): (bool,) = sqlx::query_as(
             &r#"
-            select DATA_TYPE = 'integer' 
-            from INFORMATION_SCHEMA.COLUMNS 
+            select DATA_TYPE = 'integer'
+            from INFORMATION_SCHEMA.COLUMNS
             WHERE TABLE_NAME = '%%TABLE_NAME%%' and COLUMN_NAME = 'expires';
             "#
             .replace("%%TABLE_NAME%%", table_name),
@@ -104,9 +104,7 @@ impl DatabasePool for SessionMySqlPool {
 
     async fn store(
         &self,
-        id: &str,
-        session: &str,
-        expires: i64,
+        session: &Box<dyn SessionOps>,
         table_name: &str,
     ) -> Result<(), DatabaseError> {
         sqlx::query(
@@ -119,16 +117,17 @@ impl DatabasePool for SessionMySqlPool {
     "#
             .replace("%%TABLE_NAME%%", table_name),
         )
-        .bind(id)
-        .bind(session)
-        .bind(expires)
+        .bind(session.id())
+        .bind(session.to_string())
+        .bind(session.expires_at().timestamp())
         .execute(&self.pool)
         .await
         .map_err(|err| DatabaseError::GenericInsertError(err.to_string()))?;
+
         Ok(())
     }
 
-    async fn load(&self, id: &str, table_name: &str) -> Result<Option<String>, DatabaseError> {
+    async fn load(&self, id: &str, table_name: &str) -> Result<Option<StoredAs>, DatabaseError> {
         let result: Option<(String,)> = sqlx::query_as(
             &r#"
             SELECT session FROM %%TABLE_NAME%%
@@ -142,7 +141,7 @@ impl DatabasePool for SessionMySqlPool {
         .await
         .map_err(|err| DatabaseError::GenericSelectError(err.to_string()))?;
 
-        Ok(result.map(|(session,)| session))
+        Ok(result.map(|(session,)| session.into()))
     }
 
     async fn delete_one_by_id(&self, id: &str, table_name: &str) -> Result<(), DatabaseError> {
@@ -153,6 +152,7 @@ impl DatabasePool for SessionMySqlPool {
         .execute(&self.pool)
         .await
         .map_err(|err| DatabaseError::GenericDeleteError(err.to_string()))?;
+
         Ok(())
     }
 
@@ -178,6 +178,7 @@ impl DatabasePool for SessionMySqlPool {
             .execute(&self.pool)
             .await
             .map_err(|err| DatabaseError::GenericDeleteError(err.to_string()))?;
+
         Ok(())
     }
 

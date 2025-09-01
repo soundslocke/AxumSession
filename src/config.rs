@@ -7,6 +7,8 @@ use std::{
 };
 use uuid::Uuid;
 
+use crate::{SessionData, SessionOps};
+
 /// Mode at which the Session will function As.
 ///
 /// # Examples
@@ -99,13 +101,13 @@ impl Debug for CookieAndHeaderConfig {
 
 #[derive(Clone)]
 pub struct DatabaseConfig {
-    /// Encyption Key used to encypt Session data stored in the database for confidentiality.
+    /// Encryption Key used to encrypt Session data stored in the database for confidentiality.
     pub(crate) database_key: Option<Key>,
     /// Session Database table name default is sessions.
     pub(crate) table_name: Cow<'static, str>,
     /// This value represents the duration for how often session's data gets purged from the database per request.
     pub(crate) purge_database_update: Duration,
-    /// Ignore's the update checks and will always save the session to the database if set to true.
+    /// Ignore the update checks and always save the session to the database.
     pub(crate) always_save: bool,
 }
 
@@ -206,6 +208,8 @@ impl IdGenerator for Uuid {
 pub struct SessionConfig {
     /// Disables the need to avoid session saving.
     pub(crate) session_mode: SessionMode,
+    /// The implementation for data handling operations.
+    pub(crate) session_ops: Arc<dyn SessionOps>,
     pub(crate) id_generator: Arc<dyn IdGenerator>,
     /// Minimal lifespan of database store and cookie before expiring.
     /// This is set to the Cookie before sending and to the database before updating/inserting.
@@ -229,6 +233,7 @@ pub struct SessionConfig {
 impl Debug for SessionConfig {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         f.debug_struct("SessionConfig")
+            .field("session_ops", &self.session_ops)
             .field("id_generator", &self.id_generator)
             .field("database", &self.database)
             .field("memory", &self.memory)
@@ -795,6 +800,7 @@ impl SessionConfig {
 impl Default for SessionConfig {
     fn default() -> Self {
         Self {
+            session_ops: Arc::new(SessionData::default()),
             id_generator: Arc::new(Uuid::default()),
             // Set to a 6 hour default in Database Session stores unloading.
             lifespan: Duration::try_hours(6).unwrap_or_default(),

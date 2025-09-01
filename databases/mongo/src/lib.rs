@@ -4,7 +4,7 @@
 #![forbid(unsafe_code)]
 
 use async_trait::async_trait;
-use axum_session::{DatabaseError, DatabasePool, Session, SessionData, SessionStore};
+use axum_session::{DatabaseError, DatabasePool, Session, SessionOps, SessionStore, StoredAs};
 use chrono::Utc;
 use mongodb::{
     bson::{doc, Document},
@@ -108,19 +108,18 @@ impl DatabasePool for SessionMongoPool {
 
     async fn store(
         &self,
-        id: &str,
-        session: &SessionData,
-        expires: i64,
+        session: &Box<dyn SessionOps>,
         table_name: &str,
     ) -> Result<(), DatabaseError> {
         if let Some(db) = &self.client.default_database() {
             let filter = doc! {
-                "id": id
+                "id": &session.id()
             };
+
             let update_data = doc! {"$set": {
-                "id": id.to_string(),
-                "expires": expires,
-                "session": serde_json::to_string(session).unwrap()
+                "id": session.id(),
+                "expires": session.expires_at().timestamp(),
+                "session": session.to_string()
             }};
 
             db.collection::<MongoSessionData>(table_name)
@@ -133,7 +132,7 @@ impl DatabasePool for SessionMongoPool {
         Ok(())
     }
 
-    async fn load(&self, id: &str, table_name: &str) -> Result<Option<SessionData>, DatabaseError> {
+    async fn load(&self, id: &str, table_name: &str) -> Result<Option<StoredAs>, DatabaseError> {
         Ok(match &self.client.default_database() {
             Some(db) => {
                 let filter = doc! {
@@ -141,6 +140,7 @@ impl DatabasePool for SessionMongoPool {
                     "expires":
                         {"$gte": Utc::now().timestamp()}
                 };
+
                 match db
                     .collection::<MongoSessionData>(table_name)
                     .find_one(filter)
@@ -151,10 +151,7 @@ impl DatabasePool for SessionMongoPool {
                         if result.session.is_empty() {
                             None
                         } else {
-                            match serde_json::from_str::<SessionData>(&result.session) {
-                                Ok(session_data) => Some(session_data),
-                                Err(_) => None,
-                            }
+                            Some(result.session.into())
                         }
                     }
                     None => None,

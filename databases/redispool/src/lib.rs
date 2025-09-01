@@ -12,3 +12,10 @@ mod redis_cluster_pool;
 pub use self::redis_cluster_pool::*;
 
 pub(crate) mod redis_tools;
+
+fn key(id: &str, prefix: &str) -> String {
+    match prefix.is_empty() {
+        true => id.to_string(),
+        false => format!("{}:{}", prefix, id),
+    }
+}

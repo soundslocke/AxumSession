@@ -1,6 +1,8 @@
 use async_trait::async_trait;
-use axum_session::{DatabaseError, DatabasePool, Session, SessionData, SessionStore};
+use axum_session::{DatabaseError, DatabasePool, Session, SessionOps, SessionStore, StoredAs};
 use redis_pool::SingleRedisPool;
+
+use crate::key;
 
 ///Redis's Session Helper type for the DatabasePool.
 pub type SessionRedisSession = Session<SessionRedisPool>;
@@ -64,54 +66,46 @@ impl DatabasePool for SessionRedisPool {
 
     async fn store(
         &self,
-        id: &str,
-        session: &SessionData,
-        expires: i64,
+        session: &Box<dyn SessionOps>,
         table_name: &str,
     ) -> Result<(), DatabaseError> {
-        let id = if table_name.is_empty() {
-            id.to_string()
-        } else {
-            format!("{table_name}:{id}")
-        };
         let mut con = self
             .pool
             .acquire()
             .await
             .map_err(|err| DatabaseError::GenericAcquire(err.to_string()))?;
+
+        let key = key(&session.id(), table_name);
+
         redis::pipe()
             .atomic() //makes this a transaction.
-            .set(&id, serde_json::to_string(session).unwrap())
+            .set(&key, session.to_string())
             .ignore()
-            .expire_at(&id, expires)
+            .expire_at(&key, session.expires_at().timestamp())
             .ignore()
             .query_async::<()>(&mut con)
             .await
             .map_err(|err| DatabaseError::GenericSelectError(err.to_string()))?;
+
         Ok(())
     }
 
-    async fn load(&self, id: &str, table_name: &str) -> Result<Option<SessionData>, DatabaseError> {
+    async fn load(&self, id: &str, table_name: &str) -> Result<Option<StoredAs>, DatabaseError> {
         let mut con = self
             .pool
             .acquire()
             .await
             .map_err(|err| DatabaseError::GenericAcquire(err.to_string()))?;
-        let id = if table_name.is_empty() {
-            id.to_string()
-        } else {
-            format!("{table_name}:{id}")
-        };
+
+        let key = key(id, table_name);
+
         let result: String = redis::cmd("GET")
-            .arg(id)
+            .arg(key)
             .query_async(&mut con)
             .await
             .map_err(|err| DatabaseError::GenericSelectError(err.to_string()))?;
 
-        let session = serde_json::from_str::<SessionData>(&result)
-            .map_err(|err| DatabaseError::GenericSelectError(err.to_string()));
-
-        Some(session).transpose()
+        Ok(Some(result.into()))
     }
 
     async fn delete_one_by_id(&self, id: &str, table_name: &str) -> Result<(), DatabaseError> {
@@ -120,13 +114,11 @@ impl DatabasePool for SessionRedisPool {
             .acquire()
             .await
             .map_err(|err| DatabaseError::GenericAcquire(err.to_string()))?;
-        let id = if table_name.is_empty() {
-            id.to_string()
-        } else {
-            format!("{table_name}:{id}")
-        };
+
+        let key = key(id, table_name);
+
         redis::cmd("DEL")
-            .arg(id)
+            .arg(key)
             .query_async::<()>(&mut con)
             .await
             .map_err(|err| DatabaseError::GenericDeleteError(err.to_string()))?;
@@ -139,13 +131,11 @@ impl DatabasePool for SessionRedisPool {
             .acquire()
             .await
             .map_err(|err| DatabaseError::GenericAcquire(err.to_string()))?;
-        let id = if table_name.is_empty() {
-            id.to_string()
-        } else {
-            format!("{table_name}:{id}")
-        };
+
+        let key = key(id, table_name);
+
         let exists: bool = redis::cmd("EXISTS")
-            .arg(id)
+            .arg(key)
             .query_async(&mut con)
             .await
             .map_err(|err| DatabaseError::GenericSelectError(err.to_string()))?;
@@ -159,6 +149,7 @@ impl DatabasePool for SessionRedisPool {
             .acquire()
             .await
             .map_err(|err| DatabaseError::GenericAcquire(err.to_string()))?;
+
         if table_name.is_empty() {
             redis::cmd("FLUSHDB")
                 .query_async::<()>(&mut con)
@@ -189,6 +180,7 @@ impl DatabasePool for SessionRedisPool {
             .acquire()
             .await
             .map_err(|err| DatabaseError::GenericAcquire(err.to_string()))?;
+
         let table_name = if table_name.is_empty() {
             "*".to_string()
         } else {
@@ -199,6 +191,7 @@ impl DatabasePool for SessionRedisPool {
             super::redis_tools::scan_keys(&mut con, &format!("{table_name}:*"))
                 .await
                 .map_err(|err| DatabaseError::GenericSelectError(err.to_string()))?;
+
         Ok(result)
     }
 

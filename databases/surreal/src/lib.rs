@@ -4,7 +4,7 @@
 #![forbid(unsafe_code)]
 
 use async_trait::async_trait;
-use axum_session::{DatabaseError, DatabasePool, Session, SessionData, SessionStore};
+use axum_session::{DatabaseError, DatabasePool, Session, SessionOps, SessionStore, StoredAs};
 use chrono::Utc;
 use surrealdb::{Connection, Surreal};
 
@@ -105,9 +105,7 @@ impl<C: Connection> DatabasePool for SessionSurrealPool<C> {
 
     async fn store(
         &self,
-        id: &str,
-        session: &SessionData,
-        expires: i64,
+        session: &Box<dyn SessionOps>,
         table_name: &str,
     ) -> Result<(), DatabaseError> {
         self.connection
@@ -115,15 +113,15 @@ impl<C: Connection> DatabasePool for SessionSurrealPool<C> {
             "UPSERT type::thing($table_name, $session_id) SET sessionstore = $store, sessionexpires = $expire, sessionid = $session_id;",
         )
         .bind(("table_name", table_name.to_string()))
-        .bind(("session_id", id.to_string()))
-        .bind(("expire", expires.to_string()))
-        .bind(("store", serde_json::to_string(session).unwrap()))
+        .bind(("session_id", session.id()))
+        .bind(("expire", session.expires_at().timestamp()))
+        .bind(("store", session.to_string()))
         .await.map_err(|err| DatabaseError::GenericSelectError(err.to_string()))?;
 
         Ok(())
     }
 
-    async fn load(&self, id: &str, table_name: &str) -> Result<Option<SessionData>, DatabaseError> {
+    async fn load(&self, id: &str, table_name: &str) -> Result<Option<StoredAs>, DatabaseError> {
         let mut res = self
             .connection
             .query(
@@ -140,10 +138,7 @@ impl<C: Connection> DatabasePool for SessionSurrealPool<C> {
             .take("sessionstore")
             .map_err(|err| DatabaseError::GenericNotSupportedError(err.to_string()))?;
 
-        let session = serde_json::from_str::<SessionData>(&response.unwrap())
-            .map_err(|err| DatabaseError::GenericSelectError(err.to_string()));
-
-        Some(session).transpose()
+        Ok(response.map(|session| session.into()))
     }
 
     async fn delete_one_by_id(&self, id: &str, table_name: &str) -> Result<(), DatabaseError> {

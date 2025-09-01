@@ -1,4 +1,4 @@
-use crate::{DatabasePool, Session, SessionData, SessionError, SessionStore, headers::*};
+use crate::{DatabasePool, Session, SessionError, SessionStore, headers::*};
 use axum::{BoxError, response::Response};
 use bytes::Bytes;
 use chrono::Utc;
@@ -88,8 +88,12 @@ where
             // Check if the session id exists if not lets check if it exists in the database or generate a new session.
             // If manual mode is enabled then do not check for a Session unless the ID is not new.
             let check_database: bool = if is_new && !session.store.config.session_mode.is_manual() {
-                let sess = SessionData::new(session.id.clone(), storable, &session.store.config);
-                session.store.inner.insert(session.id.clone(), sess);
+                let mut session_data = session.store.config.session_ops.clone_box();
+                session_data.set_id(&session.id);
+                session_data.set_storable(storable);
+
+                session.store.inner.insert(session.id.clone(), session_data);
+
                 false
             } else if !is_new || !session.store.config.session_mode.is_manual() {
                 !session.store.service_session_data(&session)
@@ -106,16 +110,22 @@ where
                     .flatten()
                     .unwrap_or_else(|| {
                         tracing::info!(
-                            "Session {} did not exist in Database. So it was Recreated.",
+                            "Session {} did not exist in database so it was recreated.",
                             session.id.clone()
                         );
-                        SessionData::new(session.id.clone(), storable, &session.store.config)
+
+                        let mut session_data = session.store.config.session_ops.clone_box();
+                        session_data.set_id(&session.id);
+                        session_data.set_storable(storable);
+
+                        session_data
                     });
 
-                fresh_session.autoremove = Utc::now() + session.store.config.memory.memory_lifespan;
-                fresh_session.store = storable;
-                fresh_session.update = true;
-                fresh_session.requests = 1;
+                fresh_session
+                    .set_autoremove(Utc::now() + session.store.config.memory.memory_lifespan);
+                fresh_session.set_storable(storable);
+                fresh_session.reset_requests();
+
                 session
                     .store
                     .inner
@@ -151,14 +161,14 @@ where
                         .store
                         .inner
                         .iter()
-                        .filter(|r| r.autoremove < current_time)
+                        .filter(|r| r.will_autoremove(current_time))
                         .for_each(|r| filter.remove(r.key().as_bytes()));
                 }
 
                 session
                     .store
                     .inner
-                    .retain(|_k, v| v.autoremove > current_time);
+                    .retain(|_k, v| !v.will_autoremove(current_time));
 
                 session.store.timers.write().await.last_expiry_sweep =
                     Utc::now() + session.store.config.memory.purge_update;
@@ -218,9 +228,9 @@ where
 
             let (renew, storable, destroy, loaded) = match session.store.inner.get(&session.id) {
                 Some(session_data) => (
-                    session_data.renew,
-                    session_data.store,
-                    session_data.destroy,
+                    session_data.will_renew(),
+                    session_data.is_storable(),
+                    session_data.will_destroy(),
                     true,
                 ),
                 _ => (false, false, false, false),
@@ -262,11 +272,11 @@ where
                     filter.remove(session.id.as_bytes());
                 }
 
-                // Lets remove update and reinsert.
+                // Let's remove, update, and reinsert.
                 if let Some((_, mut session_data)) = session.store.inner.remove(&session.id) {
-                    session_data.id = session_id.clone();
-                    session_data.renew = false;
-                    session.id = session_id.clone();
+                    session_data.set_id(&session_id);
+                    session_data.prevent_renew();
+                    session.id = session_id;
                     session.store.inner.insert(session.id.clone(), session_data);
                 }
             }
@@ -276,22 +286,22 @@ where
                 && session.store.is_persistent()
                 && !destroy
             {
-                let clone_session = match session.store.inner.get_mut(&session.id.clone()) {
+                let updated_session = match session.store.inner.get_mut(&session.id) {
                     Some(mut sess) => {
                         // Check if Database needs to be updated or not. TODO: Make updatable based on a timer for in memory only.
                         if session.store.config.database.always_save
-                            || sess.update
-                            || !sess.expired()
+                            || sess.will_update()
+                            || !sess.is_expired()
                         {
-                            if sess.longterm {
-                                sess.expires = Utc::now() + session.store.config.max_lifespan;
+                            if sess.is_longterm() {
+                                sess.set_expiration(Utc::now() + session.store.config.max_lifespan);
                             } else {
-                                sess.expires = Utc::now() + session.store.config.lifespan;
+                                sess.set_expiration(Utc::now() + session.store.config.lifespan);
                             };
 
-                            sess.update = false;
+                            sess.prevent_update();
 
-                            Some(sess.clone())
+                            Some(sess)
                         } else {
                             None
                         }
@@ -299,7 +309,7 @@ where
                     _ => None,
                 };
 
-                if let Some(sess) = clone_session {
+                if let Some(sess) = updated_session {
                     if let Err(err) = session.store.store_session(&sess).await {
                         return trace_error(err, "failed to save session to database");
                     } else {

@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use axum_session::{DatabaseError, DatabasePool, Session, SessionData, SessionStore};
+use axum_session::{DatabaseError, DatabasePool, Session, SessionOps, SessionStore, StoredAs};
 use chrono::Utc;
 use sqlx::{pool::Pool, Sqlite};
 
@@ -63,6 +63,7 @@ impl DatabasePool for SessionSqlitePool {
         .execute(&self.pool)
         .await
         .map_err(|err| DatabaseError::GenericDeleteError(err.to_string()))?;
+
         Ok(result)
     }
 
@@ -79,9 +80,7 @@ impl DatabasePool for SessionSqlitePool {
 
     async fn store(
         &self,
-        id: &str,
-        session: &SessionData,
-        expires: i64,
+        session: &Box<dyn SessionOps>,
         table_name: &str,
     ) -> Result<(), DatabaseError> {
         sqlx::query(
@@ -94,16 +93,17 @@ impl DatabasePool for SessionSqlitePool {
     "#
             .replace("%%TABLE_NAME%%", table_name),
         )
-        .bind(id)
-        .bind(serde_json::to_string(session).unwrap())
-        .bind(expires)
+        .bind(session.id())
+        .bind(session.to_string())
+        .bind(session.expires_at().timestamp())
         .execute(&self.pool)
         .await
         .map_err(|err| DatabaseError::GenericInsertError(err.to_string()))?;
+
         Ok(())
     }
 
-    async fn load(&self, id: &str, table_name: &str) -> Result<Option<SessionData>, DatabaseError> {
+    async fn load(&self, id: &str, table_name: &str) -> Result<Option<StoredAs>, DatabaseError> {
         let result: Option<(String,)> = sqlx::query_as(
             &r#"
             SELECT session FROM %%TABLE_NAME%%
@@ -117,11 +117,7 @@ impl DatabasePool for SessionSqlitePool {
         .await
         .map_err(|err| DatabaseError::GenericSelectError(err.to_string()))?;
 
-        let session =
-            serde_json::from_str::<SessionData>(&result.map(|(session,)| session).unwrap())
-                .map_err(|err| DatabaseError::GenericSelectError(err.to_string()));
-
-        Some(session).transpose()
+        Ok(result.map(|(session,)| session.into()))
     }
 
     async fn delete_one_by_id(&self, id: &str, table_name: &str) -> Result<(), DatabaseError> {
@@ -132,6 +128,7 @@ impl DatabasePool for SessionSqlitePool {
         .execute(&self.pool)
         .await
         .map_err(|err| DatabaseError::GenericDeleteError(err.to_string()))?;
+
         Ok(())
     }
 
@@ -157,6 +154,7 @@ impl DatabasePool for SessionSqlitePool {
             .execute(&self.pool)
             .await
             .map_err(|err| DatabaseError::GenericDeleteError(err.to_string()))?;
+
         Ok(())
     }
 

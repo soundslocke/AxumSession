@@ -1,10 +1,10 @@
-use crate::{DatabasePool, SessionData, SessionError, SessionStore};
+use crate::{DatabasePool, SessionError, SessionStore};
 use axum::extract::FromRequestParts;
 
 #[cfg(feature = "key-store")]
 use fastbloom_rs::Membership;
 use http::{StatusCode, request::Parts};
-use serde::Serialize;
+use serde::de::DeserializeOwned;
 use std::fmt::Debug;
 
 /// A Session Store.
@@ -141,7 +141,11 @@ where
                 as the Session data is created already."
             );
         }
-        let session_data = SessionData::new(self.id.clone(), true, &self.store.config);
+
+        let mut session_data = self.store.config.session_ops.clone_box();
+        session_data.set_id(&self.id);
+        session_data.set_storable(true);
+
         self.store.inner.insert(self.id.clone(), session_data);
     }
 
@@ -245,7 +249,10 @@ where
     ///Used to get data stored within SessionData's hashmap from a key value.
     ///
     #[inline]
-    pub fn get<T: serde::de::DeserializeOwned>(&self, key: &str) -> Option<T> {
+    pub fn get<V>(&self, key: &str) -> Option<V>
+    where
+        V: DeserializeOwned,
+    {
         self.store.get(self.id.clone(), key)
     }
 
@@ -262,7 +269,10 @@ where
     /// Used to get data stored within SessionData's hashmap from a key value.
     ///
     #[inline]
-    pub fn get_remove<T: serde::de::DeserializeOwned>(&self, key: &str) -> Option<T> {
+    pub fn get_remove<V>(&self, key: &str) -> Option<V>
+    where
+        V: DeserializeOwned,
+    {
         self.store.get_remove(self.id.clone(), key)
     }
 
@@ -275,7 +285,10 @@ where
     /// ```
     ///
     #[inline]
-    pub fn set(&self, key: &str, value: impl Serialize) {
+    pub fn set<V>(&self, key: &str, value: V)
+    where
+        V: serde::Serialize,
+    {
         self.store.set(self.id.clone(), key, value);
     }
 
@@ -559,7 +572,10 @@ where
     ///Used to get data stored within SessionData's hashmap from a key value.
     ///
     #[inline]
-    pub fn get<T: serde::de::DeserializeOwned>(&self, key: &str) -> Option<T> {
+    pub fn get<V>(&self, key: &str) -> Option<V>
+    where
+        V: DeserializeOwned,
+    {
         self.store.get(self.id.clone(), key)
     }
 
