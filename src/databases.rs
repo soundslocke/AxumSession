@@ -5,4 +5,4 @@ mod null;
 pub use null::*;
 
 mod database;
-pub use database::{DatabaseError, DatabasePool};
+pub use database::{DatabaseError, DatabasePool, StoredAs};

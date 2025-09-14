@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use axum_session::{DatabaseError, DatabasePool, Session, SessionStore};
+use axum_session::{DatabaseError, DatabasePool, Session, SessionStore, StoredAs};
 use chrono::Utc;
 use sqlx::{pool::Pool, PgPool, Postgres};
 
@@ -127,7 +127,7 @@ impl DatabasePool for SessionPgPool {
         Ok(())
     }
 
-    async fn load(&self, id: &str, table_name: &str) -> Result<Option<String>, DatabaseError> {
+    async fn load(&self, id: &str, table_name: &str) -> Result<Option<StoredAs>, DatabaseError> {
         let result: Option<(String,)> = sqlx::query_as(
             &r#"
             SELECT session FROM %%TABLE_NAME%%
@@ -141,7 +141,7 @@ impl DatabasePool for SessionPgPool {
         .await
         .map_err(|err| DatabaseError::GenericSelectError(err.to_string()))?;
 
-        Ok(result.map(|(session,)| session))
+        Ok(result.map(|(session,)| session.into()))
     }
 
     async fn delete_one_by_id(&self, id: &str, table_name: &str) -> Result<(), DatabaseError> {

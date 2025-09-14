@@ -224,31 +224,14 @@ where
         cookie_value: String,
     ) -> Result<Option<SessionData>, SessionError> {
         if let Some(client) = &self.client {
-            let result: Option<String> = client
+            let stored = client
                 .load(&cookie_value, &self.config.database.table_name)
-                .await?;
+                .await?
+                .unwrap_or_default();
 
-            if let Some(mut session) = result
-                .map(|session| {
-                    if let Some(key) = self.config.database.database_key.as_ref() {
-                        serde_json::from_str::<SessionData>(
-                            &match encrypt::decrypt(&cookie_value, &session, key) {
-                                Ok(v) => v,
-                                Err(err) => {
-                                    tracing::error!(err = %err, "Failed to decrypt Session data from database.");
-                                    String::new()
-                                }
-                            }
-                        )
-                    } else {
-                        serde_json::from_str::<SessionData>(&session)
-                    }
-                })
-                .transpose()?
-            {
-                session.id = cookie_value;
-                return Ok(Some(session));
-            }
+            let session_data = SessionData::new_from_storage(cookie_value, stored, &self.config);
+
+            return Some(session_data).transpose();
         }
 
         Ok(None)

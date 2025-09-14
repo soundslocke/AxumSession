@@ -4,7 +4,7 @@
 #![forbid(unsafe_code)]
 
 use async_trait::async_trait;
-use axum_session::{DatabaseError, DatabasePool, Session, SessionStore};
+use axum_session::{DatabaseError, DatabasePool, Session, SessionStore, StoredAs};
 use chrono::Utc;
 use mongodb::{
     bson::{doc, Document},
@@ -133,7 +133,7 @@ impl DatabasePool for SessionMongoPool {
         Ok(())
     }
 
-    async fn load(&self, id: &str, table_name: &str) -> Result<Option<String>, DatabaseError> {
+    async fn load(&self, id: &str, table_name: &str) -> Result<Option<StoredAs>, DatabaseError> {
         Ok(match &self.client.default_database() {
             Some(db) => {
                 let filter = doc! {
@@ -151,7 +151,7 @@ impl DatabasePool for SessionMongoPool {
                         if result.session.is_empty() {
                             None
                         } else {
-                            Some(result.session)
+                            Some(result.session.into())
                         }
                     }
                     None => None,

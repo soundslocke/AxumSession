@@ -1,6 +1,8 @@
 use async_trait::async_trait;
-use axum_session::{DatabaseError, DatabasePool, Session, SessionStore};
+use axum_session::{DatabaseError, DatabasePool, Session, SessionStore, StoredAs};
 use bb8_redis::{bb8::Pool, RedisConnectionManager};
+
+use crate::key;
 ///Redis's Session Helper type for the DatabasePool.
 pub type SessionRedisSession = Session<SessionRedisPool>;
 ///Redis's Session Store Helper type for the DatabasePool.
@@ -71,45 +73,43 @@ impl DatabasePool for SessionRedisPool {
         expires: i64,
         table_name: &str,
     ) -> Result<(), DatabaseError> {
-        let id = if table_name.is_empty() {
-            id.to_string()
-        } else {
-            format!("{table_name}:{id}")
-        };
+        let key = key(id, table_name);
+
         let mut con = self
             .pool
             .get()
             .await
             .map_err(|err| DatabaseError::GenericAcquire(err.to_string()))?;
+
         redis::pipe()
-            .atomic() //makes this a transation.
-            .set(&id, session)
+            .atomic() //makes this a transaction.
+            .set(&key, session)
             .ignore()
-            .expire_at(&id, expires)
+            .expire_at(&key, expires)
             .ignore()
             .query_async::<()>(&mut *con)
             .await
             .map_err(|err| DatabaseError::GenericSelectError(err.to_string()))?;
+
         Ok(())
     }
 
-    async fn load(&self, id: &str, table_name: &str) -> Result<Option<String>, DatabaseError> {
+    async fn load(&self, id: &str, table_name: &str) -> Result<Option<StoredAs>, DatabaseError> {
         let mut con = self
             .pool
             .get()
             .await
             .map_err(|err| DatabaseError::GenericAcquire(err.to_string()))?;
-        let id = if table_name.is_empty() {
-            id.to_string()
-        } else {
-            format!("{table_name}:{id}")
-        };
+
+        let key = key(id, table_name);
+
         let result: String = redis::cmd("GET")
-            .arg(id)
+            .arg(key)
             .query_async(&mut *con)
             .await
             .map_err(|err| DatabaseError::GenericSelectError(err.to_string()))?;
-        Ok(Some(result))
+
+        Ok(Some(result.into()))
     }
 
     async fn delete_one_by_id(&self, id: &str, table_name: &str) -> Result<(), DatabaseError> {
@@ -118,13 +118,11 @@ impl DatabasePool for SessionRedisPool {
             .get()
             .await
             .map_err(|err| DatabaseError::GenericAcquire(err.to_string()))?;
-        let id = if table_name.is_empty() {
-            id.to_string()
-        } else {
-            format!("{table_name}:{id}")
-        };
+
+        let key = key(id, table_name);
+
         redis::cmd("DEL")
-            .arg(id)
+            .arg(key)
             .query_async::<()>(&mut *con)
             .await
             .map_err(|err| DatabaseError::GenericDeleteError(err.to_string()))?;
@@ -137,13 +135,11 @@ impl DatabasePool for SessionRedisPool {
             .get()
             .await
             .map_err(|err| DatabaseError::GenericAcquire(err.to_string()))?;
-        let id = if table_name.is_empty() {
-            id.to_string()
-        } else {
-            format!("{table_name}:{id}")
-        };
+
+        let key = key(id, table_name);
+
         let exists: bool = redis::cmd("EXISTS")
-            .arg(id)
+            .arg(key)
             .query_async(&mut *con)
             .await
             .map_err(|err| DatabaseError::GenericSelectError(err.to_string()))?;
@@ -157,6 +153,7 @@ impl DatabasePool for SessionRedisPool {
             .get()
             .await
             .map_err(|err| DatabaseError::GenericAcquire(err.to_string()))?;
+
         if table_name.is_empty() {
             redis::cmd("FLUSHDB")
                 .query_async::<()>(&mut *con)
@@ -187,6 +184,7 @@ impl DatabasePool for SessionRedisPool {
             .get()
             .await
             .map_err(|err| DatabaseError::GenericAcquire(err.to_string()))?;
+
         let table_name = if table_name.is_empty() {
             "*".to_string()
         } else {

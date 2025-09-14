@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use serde_json::Value;
 use thiserror::Error;
 
 /// The Trait used to identify a database pool.
@@ -30,7 +31,7 @@ pub trait DatabasePool {
 
     /// This is called to receive the session from the database using the given table name.
     /// if an error occurs it should be propagated to the caller.
-    async fn load(&self, id: &str, table_name: &str) -> Result<Option<String>, DatabaseError>;
+    async fn load(&self, id: &str, table_name: &str) -> Result<Option<StoredAs>, DatabaseError>;
 
     /// This is called to delete one session from the database using the given table name.
     /// if an error occurs it should be propagated to the caller.
@@ -53,6 +54,36 @@ pub trait DatabasePool {
     async fn get_ids(&self, table_name: &str) -> Result<Vec<String>, DatabaseError>;
 
     fn auto_handles_expiry(&self) -> bool;
+}
+
+#[derive(Debug)]
+pub enum StoredAs {
+    String(String),
+    JsonValue(Value),
+}
+
+impl Default for StoredAs {
+    fn default() -> Self {
+        StoredAs::String("".to_string())
+    }
+}
+
+impl From<String> for StoredAs {
+    fn from(s: String) -> Self {
+        StoredAs::String(s)
+    }
+}
+
+impl From<&str> for StoredAs {
+    fn from(s: &str) -> Self {
+        StoredAs::String(s.to_string())
+    }
+}
+
+impl From<Value> for StoredAs {
+    fn from(v: Value) -> Self {
+        StoredAs::JsonValue(v)
+    }
 }
 
 #[derive(Error, Debug)]

@@ -1,5 +1,7 @@
-use crate::SessionConfig;
+use crate::sec::encrypt;
+use crate::{SessionConfig, SessionError, StoredAs};
 use chrono::{DateTime, Duration, Utc};
+use cookie::Key;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fmt::Debug};
 
@@ -64,6 +66,31 @@ impl SessionData {
             update: true,
             requests: 1,
         }
+    }
+
+    fn decrypt(id: &str, encrypted: &str, key: &Key) -> String {
+        match encrypt::decrypt(&id, &encrypted, &key) {
+            Ok(value) => value,
+            Err(err) => {
+                tracing::error!(err = %err, "Failed to decrypt Session data from database.");
+                String::new()
+            }
+        }
+    }
+
+    pub(crate) fn new_from_storage(
+        id: String,
+        stored: StoredAs,
+        config: &SessionConfig,
+    ) -> Result<Self, SessionError> {
+        match (stored, &config.database.database_key) {
+            (StoredAs::String(s), Some(key)) => {
+                serde_json::from_str::<Self>(&Self::decrypt(&id, &s, key))
+            }
+            (StoredAs::String(s), _) => serde_json::from_str::<Self>(&s),
+            (StoredAs::JsonValue(j), _) => serde_json::from_value(j),
+        }
+        .map_err(|error| SessionError::SerdeJson(error))
     }
 
     /// Determines whether the session has expired.
