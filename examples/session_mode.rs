@@ -16,7 +16,7 @@ async fn main() {
         .with_mode(SessionMode::OptIn);
 
     // create SessionStore and initiate the database tables
-    let session_store = SessionPgSessionStore::new(Some(poll.clone().into()), session_config)
+    let session_store = SessionPgSessionStore::new(Some(poll.clone().into()), None, session_config)
         .await
         .unwrap();
 

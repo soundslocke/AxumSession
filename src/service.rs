@@ -1,4 +1,4 @@
-use crate::{DatabasePool, Session, SessionError, SessionStore, headers::*};
+use crate::{DatabasePool, Session, SessionError, SessionOps, SessionStore, headers::*};
 use axum::{BoxError, response::Response};
 use bytes::Bytes;
 use chrono::Utc;
@@ -15,11 +15,12 @@ use std::{
 use tower_service::Service;
 
 #[derive(Clone)]
-pub struct SessionService<S, T>
+pub struct SessionService<S, D, O>
 where
-    T: DatabasePool + Clone + Debug + Sync + Send + 'static,
+    D: DatabasePool + Clone + Debug + Sync + Send + 'static,
+    O: SessionOps + Clone + Debug + Send + Sync + 'static,
 {
-    pub(crate) session_store: SessionStore<T>,
+    pub(crate) session_store: SessionStore<D, O>,
     pub(crate) inner: S,
 }
 
@@ -37,7 +38,7 @@ where
     Ok(res)
 }
 
-impl<S, T, ReqBody, ResBody> Service<Request<ReqBody>> for SessionService<S, T>
+impl<S, D, O, ReqBody, ResBody> Service<Request<ReqBody>> for SessionService<S, D, O>
 where
     S: Service<Request<ReqBody>, Response = Response<ResBody>, Error = Infallible>
         + Clone
@@ -48,7 +49,8 @@ where
     Infallible: From<<S as Service<Request<ReqBody>>>::Error>,
     ResBody: HttpBody<Data = Bytes> + Default + Send + 'static,
     ResBody::Error: Into<BoxError>,
-    T: DatabasePool + Clone + Debug + Sync + Send + 'static,
+    D: DatabasePool + Clone + Debug + Sync + Send + 'static,
+    O: SessionOps + Clone + Debug + Default + Send + Sync + 'static,
 {
     type Response = Response<ResBody>;
     type Error = Infallible;
@@ -88,11 +90,14 @@ where
             // Check if the session id exists if not lets check if it exists in the database or generate a new session.
             // If manual mode is enabled then do not check for a Session unless the ID is not new.
             let check_database: bool = if is_new && !session.store.config.session_mode.is_manual() {
-                let mut session_data = session.store.config.session_ops.clone_box();
+                let mut session_data = session.store.operations.clone();
                 session_data.set_id(&session.id);
                 session_data.set_storable(storable);
 
-                session.store.inner.insert(session.id.clone(), session_data);
+                session
+                    .store
+                    .inner
+                    .insert(session.id.clone(), Box::new(session_data));
 
                 false
             } else if !is_new || !session.store.config.session_mode.is_manual() {
@@ -111,14 +116,14 @@ where
                     .unwrap_or_else(|| {
                         tracing::info!(
                             "Session {} did not exist in database so it was recreated.",
-                            session.id.clone()
+                            session.id
                         );
 
-                        let mut session_data = session.store.config.session_ops.clone_box();
+                        let mut session_data = session.store.operations.clone();
                         session_data.set_id(&session.id);
                         session_data.set_storable(storable);
 
-                        session_data
+                        Box::new(session_data)
                     });
 
                 fresh_session
@@ -369,10 +374,11 @@ where
     }
 }
 
-impl<S, T> Debug for SessionService<S, T>
+impl<S, D, O> Debug for SessionService<S, D, O>
 where
     S: Debug,
-    T: DatabasePool + Clone + Debug + Sync + Send + 'static,
+    D: DatabasePool + Clone + Debug + Sync + Send + 'static,
+    O: SessionOps + Clone + Debug + Send + Sync + 'static,
 {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("SessionService")

@@ -1,6 +1,9 @@
-use std::fmt;
+use std::{
+    fmt::Debug,
+    marker::{Send, Sync},
+};
 
-use crate::{DatabasePool, SessionService, SessionStore};
+use crate::{DatabasePool, SessionData, SessionOps, SessionService, SessionStore};
 use tower_layer::Layer;
 
 /// Sessions Layer used with Axum to activate the Service.
@@ -16,16 +19,18 @@ use tower_layer::Layer;
 /// ```
 ///
 #[derive(Clone)]
-pub struct SessionLayer<T>
+pub struct SessionLayer<D, O = SessionData>
 where
-    T: DatabasePool + Clone + fmt::Debug + std::marker::Sync + std::marker::Send + 'static,
+    D: DatabasePool + Clone + Debug + Sync + Send + 'static,
+    O: SessionOps + Clone + Debug + Send + Sync + 'static,
 {
-    session_store: SessionStore<T>,
+    session_store: SessionStore<D, O>,
 }
 
-impl<T> SessionLayer<T>
+impl<D, O> SessionLayer<D, O>
 where
-    T: DatabasePool + Clone + fmt::Debug + std::marker::Sync + std::marker::Send + 'static,
+    D: DatabasePool + Clone + Debug + Sync + Send + 'static,
+    O: SessionOps + Clone + Debug + Send + Sync + 'static,
 {
     /// Constructs a SessionLayer used with Axum to activate the Service.
     ///
@@ -40,16 +45,17 @@ where
     /// ```
     ///
     #[inline]
-    pub fn new(session_store: SessionStore<T>) -> Self {
+    pub fn new(session_store: SessionStore<D, O>) -> Self {
         SessionLayer { session_store }
     }
 }
 
-impl<S, T> Layer<S> for SessionLayer<T>
+impl<S, D, O> Layer<S> for SessionLayer<D, O>
 where
-    T: DatabasePool + Clone + fmt::Debug + std::marker::Sync + std::marker::Send + 'static,
+    D: DatabasePool + Clone + Debug + Sync + Send + 'static,
+    O: SessionOps + Clone + Debug + Send + Sync + 'static,
 {
-    type Service = SessionService<S, T>;
+    type Service = SessionService<S, D, O>;
 
     fn layer(&self, inner: S) -> Self::Service {
         SessionService {

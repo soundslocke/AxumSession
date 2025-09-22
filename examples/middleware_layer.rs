@@ -30,10 +30,13 @@ async fn main() {
     let session_config = SessionConfig::default();
 
     // create SessionStore and initiate the database tables
-    let session_store =
-        SessionStore::new(Some(SessionSurrealPool::new(db.clone())), session_config)
-            .await
-            .unwrap();
+    let session_store = SessionStore::<SessionSurrealPool<Any>>::new(
+        Some(SessionSurrealPool::new(db.clone())),
+        None,
+        session_config,
+    )
+    .await
+    .unwrap();
 
     // build our application with a single route
     let app = Router::new()

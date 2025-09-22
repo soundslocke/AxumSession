@@ -16,13 +16,13 @@ async fn main() {
         // 'Key::generate()' will generate a new key each restart of the server.
         // If you want it to be more permanent then generate and set it to a config file.
         // If with_key() is used it will set all cookies or headers as signed, which guarantees integrity, and authenticity.
-        // We dont need Private cookies since we do not Send any sensitive data to store inside the cookie.
+        // We don't need Private cookies since we do not Send any sensitive data to store inside the cookie.
         .with_key(Key::generate())
         // This is how we would Set a Database Key to encrypt as store our per session data.
         .with_database_key(Key::generate());
 
     // create SessionStore and initiate the database tables
-    let session_store = SessionPgSessionStore::new(Some(poll.clone().into()), session_config)
+    let session_store = SessionPgSessionStore::new(Some(poll.clone().into()), None, session_config)
         .await
         .unwrap();
 

@@ -197,7 +197,7 @@ pub trait SessionOps: Debug + Send + Sync {
     fn clone_box(&self) -> Box<dyn SessionOps>;
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SessionData {
     #[serde(skip)]
     pub id: String,

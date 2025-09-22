@@ -10,7 +10,7 @@ async fn main() {
     let session_config = SessionConfig::default().with_table_name("sessions_table");
 
     // create SessionStore and initiate the database tables
-    let session_store = SessionStore::<SessionNullPool>::new(None, session_config)
+    let session_store = SessionStore::<SessionNullPool>::new(None, None, session_config)
         .await
         .unwrap();
 

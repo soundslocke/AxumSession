@@ -17,7 +17,7 @@ async fn main() {
     let session_config = SessionConfig::default().with_table_name("sessions_table");
 
     // create SessionStore and initiate the database tables
-    let session_store = SessionStore::<SessionAnyPool>::new(Some(poll), session_config)
+    let session_store = SessionStore::<SessionAnyPool>::new(Some(poll), None, session_config)
         .await
         .unwrap();
 

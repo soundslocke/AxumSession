@@ -20,7 +20,7 @@ async fn main() {
 
     // create SessionStore and initiate the database tables
     let session_store =
-        SessionStore::<SessionRedisPool>::new(Some(pool.clone().into()), session_config)
+        SessionStore::<SessionRedisPool>::new(Some(pool.clone().into()), None, session_config)
             .await
             .unwrap();
 

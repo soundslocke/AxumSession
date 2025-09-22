@@ -1,5 +1,5 @@
 #[cfg(not(feature = "rest_mode"))]
-use crate::CookiesAdditionJar;
+use crate::{CookiesAdditionJar, SessionOps};
 use crate::{DatabasePool, Session, SessionConfig, SessionStore};
 #[cfg(not(feature = "rest_mode"))]
 use cookie::{Cookie, CookieJar, Key};
@@ -52,13 +52,14 @@ impl NameType {
 }
 
 #[cfg(not(feature = "rest_mode"))]
-pub async fn get_headers_and_key<T>(
-    store: &SessionStore<T>,
+pub async fn get_headers_and_key<D, O>(
+    store: &SessionStore<D, O>,
     cookies: CookieJar,
     ip_user_agent: &str,
 ) -> (Option<String>, bool)
 where
-    T: DatabasePool + Clone + Debug + Sync + Send + 'static,
+    D: DatabasePool + Clone + Debug + Sync + Send + 'static,
+    O: SessionOps + Clone + Debug + Send + Sync + 'static,
 {
     let key = store.config.cookie_and_header.key.as_ref();
 
@@ -268,14 +269,15 @@ fn set_cookies(jar: CookieJar, headers: &mut HeaderMap) {
 }
 
 /// Used to Set either the Header Values or the Cookie Values.
-pub(crate) fn set_headers<T>(
-    session: &Session<T>,
+pub(crate) fn set_headers<D, O>(
+    session: &Session<D, O>,
     headers: &mut HeaderMap,
     ip_user_agent: &str,
     destroy: bool,
     storable: bool,
 ) where
-    T: DatabasePool + Clone + Debug + Sync + Send + 'static,
+    D: DatabasePool + Clone + Debug + Sync + Send + 'static,
+    O: SessionOps + Clone + Debug + Default + Send + Sync + 'static,
 {
     // Lets make a new jar as we only want to add our cookies to the Response cookie header.\
     #[cfg(not(feature = "rest_mode"))]
@@ -361,9 +363,10 @@ pub(crate) fn set_headers<T>(
 ///Rather than getting a single IP from the x_real, X forwarded and socket ip
 ///It is better to use all 3 to ensure none of them have changed. Setting the default
 /// to be a empty String if it is not present. we will combine these together in a single Message String.
-pub(crate) fn get_ips_hash<T, D>(req: &Request<T>, store: &SessionStore<D>) -> String
+pub(crate) fn get_ips_hash<T, D, O>(req: &Request<T>, store: &SessionStore<D, O>) -> String
 where
     D: DatabasePool + Clone + Debug + Sync + Send + 'static,
+    O: SessionOps + Clone + Debug + Default + Send + Sync + 'static,
 {
     if store.config.cookie_and_header.key.is_some()
         && store.config.cookie_and_header.with_ip_and_user_agent

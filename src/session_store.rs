@@ -1,4 +1,6 @@
-use crate::{DatabasePool, Session, SessionConfig, SessionError, SessionOps, SessionTimers};
+use crate::{
+    DatabasePool, Session, SessionConfig, SessionData, SessionError, SessionOps, SessionTimers,
+};
 use axum::extract::FromRequestParts;
 use chrono::{Duration, Utc};
 use dashmap::DashMap;
@@ -22,12 +24,15 @@ use tokio::sync::RwLock;
 /// ```
 ///
 #[derive(Clone, Debug)]
-pub struct SessionStore<T>
+pub struct SessionStore<D, O = SessionData>
 where
-    T: DatabasePool + Clone + Debug + Sync + Send + 'static,
+    D: DatabasePool + Clone + Debug + Sync + Send + 'static,
+    O: SessionOps + Clone + Debug + Send + Sync + 'static,
 {
     /// Client for the database.
-    pub client: Option<T>,
+    pub client: Option<D>,
+    /// Session operations
+    pub operations: O,
     /// locked Hashmap containing UserID and their session data.
     pub(crate) inner: Arc<DashMap<String, Box<dyn SessionOps>>>,
     /// Session Configuration.
@@ -39,15 +44,16 @@ where
     pub(crate) filter: Arc<RwLock<CountingBloomFilter>>,
 }
 
-impl<T, S> FromRequestParts<S> for SessionStore<T>
+impl<D, O, S> FromRequestParts<S> for SessionStore<D, O>
 where
-    T: DatabasePool + Clone + Debug + Sync + Send + 'static,
+    D: DatabasePool + Clone + Debug + Sync + Send + 'static,
+    O: SessionOps + Clone + Debug + Default + Send + Sync + 'static,
     S: Send + Sync,
 {
     type Rejection = (http::StatusCode, &'static str);
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
-        let session = parts.extensions.get::<Session<T>>().ok_or((
+        let session = parts.extensions.get::<Session<D, O>>().ok_or((
             StatusCode::INTERNAL_SERVER_ERROR,
             "Can't extract Axum `Session`. Is `SessionLayer` enabled?",
         ))?;
@@ -56,9 +62,10 @@ where
     }
 }
 
-impl<T> SessionStore<T>
+impl<D, O> SessionStore<D, O>
 where
-    T: DatabasePool + Clone + Debug + Sync + Send + 'static,
+    D: DatabasePool + Clone + Debug + Sync + Send + 'static,
+    O: SessionOps + Clone + Debug + Default + Send + Sync + 'static,
 {
     /// Constructs a New `SessionStore` and Creates the Database Table
     /// needed for the Session if it does not exist if client is not `None`.
@@ -68,11 +75,15 @@ where
     /// use axum_session::{SessionNullPool, SessionConfig, SessionStore};
     ///
     /// let config = SessionConfig::default();
-    /// let session_store = SessionStore::<SessionNullPool>::new(None, config).await.unwrap();
+    /// let session_store = SessionStore::<SessionNullPool>::new(None, None, config).await.unwrap();
     /// ```
     ///
     #[inline]
-    pub async fn new(client: Option<T>, config: SessionConfig) -> Result<Self, SessionError> {
+    pub async fn new(
+        client: Option<D>,
+        operations: Option<O>,
+        config: SessionConfig,
+    ) -> Result<Self, SessionError> {
         if let Some(client) = &client {
             client.initiate(&config.database.table_name).await?
         }
@@ -84,6 +95,7 @@ where
 
         Ok(Self {
             client,
+            operations: operations.unwrap_or(O::default()),
             inner: Default::default(),
             config,
             timers: Arc::new(RwLock::new(SessionTimers {
@@ -100,7 +112,7 @@ where
     /// Used to create and Fill the Filter.
     #[cfg(feature = "key-store")]
     pub(crate) async fn create_filter(
-        client: &Option<T>,
+        client: &Option<D>,
         config: &SessionConfig,
     ) -> Result<CountingBloomFilter, SessionError> {
         let mut filter = FilterBuilder::new(
@@ -227,11 +239,11 @@ where
                 .await?
                 .unwrap_or_default();
 
-            let session_ops = self.config.session_ops.from_storage(&stored_session);
+            let session_ops = self.operations.from_storage(&stored_session);
 
             return Some(session_ops).transpose();
 
-            // TODO implement encryption in SessionData...
+            // TODO implement encryption in SessionOps...
             // if let Some(mut session) = result
             //     .map(|session| {
             //         if let Some(key) = self.config.database.database_key.as_ref() {
@@ -367,7 +379,7 @@ where
     /// Attempts to load check and clear Data.
     ///
     /// If no session is found returns false.
-    pub(crate) fn service_session_data(&self, session: &Session<T>) -> bool {
+    pub(crate) fn service_session_data(&self, session: &Session<D, O>) -> bool {
         if let Some(mut inner) = self.inner.get_mut(&session.id) {
             inner.service_clear(
                 self.config.memory.memory_lifespan,
