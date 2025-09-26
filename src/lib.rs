@@ -13,6 +13,7 @@ mod sec;
 mod service;
 mod session;
 mod session_data;
+mod session_operations;
 mod session_store;
 
 pub use config::{IdGenerator, Key, SameSite, SessionConfig, SessionMode};
@@ -21,7 +22,8 @@ pub use errors::SessionError;
 pub use layer::SessionLayer;
 pub use sec::*;
 pub use session::{ReadOnlySession, Session};
-pub use session_data::{SessionData, SessionOps};
+pub use session_data::SessionData;
+pub use session_operations::SessionOps;
 pub use session_store::SessionStore;
 
 pub(crate) use service::SessionService;

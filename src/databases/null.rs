@@ -1,6 +1,4 @@
-use crate::{
-    DatabaseError, DatabasePool, Session, SessionOps, SessionStore, databases::database::StoredAs,
-};
+use crate::{DatabaseError, DatabasePool, Session, SessionOps, SessionStore, StoredAs};
 use async_trait::async_trait;
 
 ///Null's Session Helper type for a DatabaseLess Session.
