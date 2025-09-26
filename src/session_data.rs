@@ -1,10 +1,11 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Duration, Utc};
+use cookie::Key;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{collections::HashMap, fmt::Debug};
 
-use crate::{SessionError, StoredAs};
+use crate::{SessionError, StoredAs, encrypt};
 
 #[async_trait]
 pub trait SessionOps: Debug + Send + Sync {
@@ -192,8 +193,11 @@ pub trait SessionOps: Debug + Send + Sync {
     fn is_parallel(&self) -> bool;
     fn to_string(&self) -> String;
     fn to_value(&self) -> Value;
-    fn from_storage(&self, s: &StoredAs) -> Result<Box<dyn SessionOps>, SessionError>;
-    fn merge_data(&mut self, data: HashMap<String, String>);
+    fn set_encryption_key(&mut self, encryption_key: &Option<Key>);
+    fn encrypt(&self) -> String;
+    fn decrypt(&self, encrypted: &str) -> String;
+    fn from_storage(&self, stored: &StoredAs) -> Result<Box<dyn SessionOps>, SessionError>;
+    fn merge(&mut self, data: HashMap<String, String>);
     fn clone_box(&self) -> Box<dyn SessionOps>;
 }
 
@@ -217,6 +221,8 @@ pub struct SessionData {
     pub update: bool,
     #[serde(skip)]
     pub requests: usize,
+    #[serde(skip)]
+    encryption_key: Option<Key>,
 }
 
 impl Default for SessionData {
@@ -232,6 +238,7 @@ impl Default for SessionData {
             store: false,
             update: false,
             requests: 0,
+            encryption_key: None,
         }
     }
 }
@@ -410,7 +417,7 @@ impl SessionOps for SessionData {
 
     #[inline]
     fn to_string(&self) -> String {
-        self.to_value().to_string()
+        self.encrypt()
     }
 
     #[inline]
@@ -418,7 +425,7 @@ impl SessionOps for SessionData {
         let value = serde_json::to_value(self);
 
         match value {
-            Ok(v) => v,
+            Ok(value) => value,
             Err(error) => {
                 tracing::error!("Could not make serde json value: {}", error.to_string());
                 Value::default()
@@ -427,20 +434,55 @@ impl SessionOps for SessionData {
     }
 
     #[inline]
-    fn from_storage(&self, stored: &StoredAs) -> Result<Box<dyn SessionOps>, SessionError> {
-        let deserialized = match stored {
-            StoredAs::String(s) => serde_json::from_str::<Self>(s),
-            StoredAs::JsonValue(j) => serde_json::from_value::<Self>(j.clone()),
-        };
+    fn set_encryption_key(&mut self, encryption_key: &Option<Key>) {
+        self.encryption_key = encryption_key.clone();
+    }
 
-        match deserialized {
-            Ok(s) => Ok(Box::new(s)),
-            Err(e) => Err(e.into()),
+    #[inline]
+    fn encrypt(&self) -> String {
+        let unencrypted = self.to_value().to_string();
+
+        match &self.encryption_key {
+            None => unencrypted,
+            Some(key) => match encrypt::encrypt(&self.id, &unencrypted, &key) {
+                Ok(encrypted) => encrypted,
+                Err(err) => {
+                    tracing::error!(err = %err, "Failed to encrypt session data.");
+                    String::new()
+                }
+            },
         }
     }
 
     #[inline]
-    fn merge_data(&mut self, data: HashMap<String, String>) {
+    fn decrypt(&self, encrypted: &str) -> String {
+        match &self.encryption_key {
+            None => encrypted.to_string(),
+            Some(key) => match encrypt::decrypt(&self.id, &encrypted, &key) {
+                Ok(value) => value,
+                Err(err) => {
+                    tracing::error!(err = %err, "Failed to decrypt session data.");
+                    String::new()
+                }
+            },
+        }
+    }
+
+    #[inline]
+    fn from_storage(&self, stored: &StoredAs) -> Result<Box<dyn SessionOps>, SessionError> {
+        let deserialized = match stored {
+            StoredAs::String(json) => serde_json::from_str::<Self>(&self.decrypt(&json)),
+            StoredAs::JsonValue(value) => serde_json::from_value(value.clone()),
+        };
+
+        match deserialized {
+            Ok(session) => Ok(Box::new(session)),
+            Err(err) => Err(err.into()),
+        }
+    }
+
+    #[inline]
+    fn merge(&mut self, data: HashMap<String, String>) {
         self.data.extend(data);
     }
 

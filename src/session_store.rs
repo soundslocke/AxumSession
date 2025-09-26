@@ -88,6 +88,9 @@ where
             client.initiate(&config.database.table_name).await?
         }
 
+        let mut operations = operations.unwrap_or(O::default());
+        operations.set_encryption_key(&config.database.database_key);
+
         // If we have a database client then lets also get any SessionId's that Exist within the database
         // that are not yet expired.
         #[cfg(feature = "key-store")]
@@ -95,7 +98,7 @@ where
 
         Ok(Self {
             client,
-            operations: operations.unwrap_or(O::default()),
+            operations,
             inner: Default::default(),
             config,
             timers: Arc::new(RwLock::new(SessionTimers {
@@ -242,29 +245,6 @@ where
             let session_ops = self.operations.from_storage(&stored_session);
 
             return Some(session_ops).transpose();
-
-            // TODO implement encryption in SessionOps...
-            // if let Some(mut session) = result
-            //     .map(|session| {
-            //         if let Some(key) = self.config.database.database_key.as_ref() {
-            //             serde_json::from_str::<SessionData>(
-            //                 &match encrypt::decrypt(&cookie_value, &session, key) {
-            //                     Ok(v) => v,
-            //                     Err(err) => {
-            //                         tracing::error!(err = %err, "Failed to decrypt Session data from database.");
-            //                         String::new()
-            //                     }
-            //                 }
-            //             )
-            //         } else {
-            //             serde_json::from_str::<SessionData>(&session)
-            //         }
-            //     })
-            //     .transpose()?
-            // {
-            //     session.id = cookie_value;
-            //     return Ok(Some(session));
-            // }
         }
 
         Ok(None)
@@ -299,21 +279,7 @@ where
     ) -> Result<(), SessionError> {
         if let Some(client) = &self.client {
             client
-                .store(
-                    session,
-                    // TODO Same as above, implement encryption in SessionData...
-                    // &if let Some(key) = self.config.database.database_key.as_ref() {
-                    //     encrypt::encrypt(&session.id, &serde_json::to_string(session)?, key)
-                    //         .map_err(|e| {
-                    //             SessionError::GenericNotSupportedError(format!(
-                    //                 "Error: {e} Occurred when encrypting a Session.",
-                    //             ))
-                    //         })?
-                    // } else {
-                    //     serde_json::to_string(session)?
-                    // },
-                    &self.config.database.table_name,
-                )
+                .store(session, &self.config.database.table_name)
                 .await?;
         }
 
