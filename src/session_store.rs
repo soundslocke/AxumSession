@@ -176,7 +176,7 @@ where
     pub async fn cleanup(&self) -> Result<Vec<String>, SessionError> {
         if let Some(client) = &self.client {
             Ok(client
-                .delete_by_expiry(&self.config.database.table_name)
+                .delete_expired(&self.config.database.table_name)
                 .await?)
         } else {
             Ok(Vec::new())
@@ -622,9 +622,7 @@ where
     #[inline]
     pub(crate) async fn database_remove_session(&self, id: String) -> Result<(), SessionError> {
         if let Some(client) = &self.client {
-            client
-                .delete_one_by_id(&id, &self.config.database.table_name)
-                .await?;
+            client.delete(&id, &self.config.database.table_name).await?;
         }
 
         Ok(())

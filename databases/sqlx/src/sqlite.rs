@@ -40,7 +40,7 @@ impl DatabasePool for SessionSqlitePool {
         Ok(())
     }
 
-    async fn delete_by_expiry(&self, table_name: &str) -> Result<Vec<String>, DatabaseError> {
+    async fn delete_expired(&self, table_name: &str) -> Result<Vec<String>, DatabaseError> {
         let result: Vec<(String,)> = sqlx::query_as(
             &r#"
             SELECT id FROM %%TABLE_NAME%%
@@ -120,7 +120,7 @@ impl DatabasePool for SessionSqlitePool {
         Ok(result.map(|(session,)| session.into()))
     }
 
-    async fn delete_one_by_id(&self, id: &str, table_name: &str) -> Result<(), DatabaseError> {
+    async fn delete(&self, id: &str, table_name: &str) -> Result<(), DatabaseError> {
         sqlx::query(
             &r#"DELETE FROM %%TABLE_NAME%% WHERE id = $1"#.replace("%%TABLE_NAME%%", table_name),
         )

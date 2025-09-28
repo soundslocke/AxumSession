@@ -56,16 +56,16 @@ impl DatabasePool for SessionAnyPool {
         self.pool.load(id, table_name).await
     }
 
-    async fn delete_one_by_id(&self, id: &str, table_name: &str) -> Result<(), DatabaseError> {
-        self.pool.delete_one_by_id(id, table_name).await
+    async fn delete(&self, id: &str, table_name: &str) -> Result<(), DatabaseError> {
+        self.pool.delete(id, table_name).await
     }
 
     async fn exists(&self, id: &str, table_name: &str) -> Result<bool, DatabaseError> {
         self.pool.exists(id, table_name).await
     }
 
-    async fn delete_by_expiry(&self, table_name: &str) -> Result<Vec<String>, DatabaseError> {
-        self.pool.delete_by_expiry(table_name).await
+    async fn delete_expired(&self, table_name: &str) -> Result<Vec<String>, DatabaseError> {
+        self.pool.delete_expired(table_name).await
     }
 
     async fn delete_all(&self, table_name: &str) -> Result<(), DatabaseError> {

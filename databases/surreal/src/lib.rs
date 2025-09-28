@@ -60,7 +60,7 @@ impl<C: Connection> DatabasePool for SessionSurrealPool<C> {
         Ok(())
     }
 
-    async fn delete_by_expiry(&self, table_name: &str) -> Result<Vec<String>, DatabaseError> {
+    async fn delete_expired(&self, table_name: &str) -> Result<Vec<String>, DatabaseError> {
         let mut res = self
             .connection
             .query(
@@ -141,7 +141,7 @@ impl<C: Connection> DatabasePool for SessionSurrealPool<C> {
         Ok(response.map(|session| session.into()))
     }
 
-    async fn delete_one_by_id(&self, id: &str, table_name: &str) -> Result<(), DatabaseError> {
+    async fn delete(&self, id: &str, table_name: &str) -> Result<(), DatabaseError> {
         self.connection
             .query("DELETE type::table($table_name) WHERE sessionid < $session_id;")
             .bind(("table_name", table_name.to_string()))

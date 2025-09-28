@@ -66,7 +66,7 @@ impl DatabasePool for SessionMongoPool {
         Ok(())
     }
 
-    async fn delete_by_expiry(&self, table_name: &str) -> Result<Vec<String>, DatabaseError> {
+    async fn delete_expired(&self, table_name: &str) -> Result<Vec<String>, DatabaseError> {
         let mut ids: Vec<String> = Vec::new();
 
         if let Some(db) = &self.client.default_database() {
@@ -161,7 +161,7 @@ impl DatabasePool for SessionMongoPool {
         })
     }
 
-    async fn delete_one_by_id(&self, id: &str, table_name: &str) -> Result<(), DatabaseError> {
+    async fn delete(&self, id: &str, table_name: &str) -> Result<(), DatabaseError> {
         if let Some(db) = &self.client.default_database() {
             let _ = db
                 .collection::<MongoSessionData>(table_name)

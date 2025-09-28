@@ -17,7 +17,7 @@ impl DatabasePool for SessionNullPool {
         Ok(())
     }
 
-    async fn delete_by_expiry(&self, _table_name: &str) -> Result<Vec<String>, DatabaseError> {
+    async fn delete_expired(&self, _table_name: &str) -> Result<Vec<String>, DatabaseError> {
         Ok(Vec::new())
     }
 
@@ -37,7 +37,7 @@ impl DatabasePool for SessionNullPool {
         Ok(None)
     }
 
-    async fn delete_one_by_id(&self, _id: &str, _table_name: &str) -> Result<(), DatabaseError> {
+    async fn delete(&self, _id: &str, _table_name: &str) -> Result<(), DatabaseError> {
         Ok(())
     }
 

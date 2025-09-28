@@ -34,7 +34,7 @@ impl DatabasePool for SessionRedisPool {
         Ok(())
     }
 
-    async fn delete_by_expiry(&self, _table_name: &str) -> Result<Vec<String>, DatabaseError> {
+    async fn delete_expired(&self, _table_name: &str) -> Result<Vec<String>, DatabaseError> {
         // Redis does this for use using the Expiry Options.
         Ok(Vec::new())
     }
@@ -108,7 +108,7 @@ impl DatabasePool for SessionRedisPool {
         Ok(Some(result.into()))
     }
 
-    async fn delete_one_by_id(&self, id: &str, table_name: &str) -> Result<(), DatabaseError> {
+    async fn delete(&self, id: &str, table_name: &str) -> Result<(), DatabaseError> {
         let mut con = self
             .pool
             .acquire()
