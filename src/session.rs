@@ -352,6 +352,11 @@ where
         self.id.clone()
     }
 
+    #[inline]
+    pub fn valid_session_id(&self, id: &str) -> bool {
+        self.store.config.id_generator.is_valid(id)
+    }
+
     /// Returns the store for this Session.
     ///
     /// The store contains everything that all sessions need.

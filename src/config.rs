@@ -185,11 +185,16 @@ impl Debug for IpUserAgentConfig {
 
 pub trait IdGenerator: Debug + Send + Sync + 'static {
     fn generate(&self) -> String;
+    fn is_valid(&self, id: &str) -> bool;
 }
 
 impl IdGenerator for Uuid {
     fn generate(&self) -> String {
         Uuid::new_v4().to_string()
+    }
+
+    fn is_valid(&self, id: &str) -> bool {
+        Uuid::try_parse(id).is_ok()
     }
 }
 

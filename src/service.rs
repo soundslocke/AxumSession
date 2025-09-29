@@ -251,7 +251,7 @@ where
             );
 
             if !destroy && (!session.store.config.session_mode.is_manual() || loaded) && renew {
-                // Lets change the Session ID and destory the old Session from the database.
+                // Lets change the ID and remove the old session from the database.
                 let session_id = match Session::generate_id(&session.store).await {
                     Ok(v) => v,
                     Err(err) => {
